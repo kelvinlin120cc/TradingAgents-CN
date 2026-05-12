@@ -22,6 +22,20 @@ os.environ.setdefault("HOST", "0.0.0.0")
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# 显式加载 .env 文件中的所有环境变量到 os.environ
+# Pydantic Settings 的 env_file 只加载 model 中定义的字段，
+# 但 tradingagents 核心模块通过 os.getenv() 读取 CUSTOM_OPENAI_* 等变量
+# 所以必须在这里显式加载，确保所有 .env 变量都可用
+try:
+    from dotenv import load_dotenv
+    env_path = PROJECT_ROOT / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)  # 不覆盖已有的系统环境变量（如扣子 Secret 注入的）
+        logger_tmp = logging.getLogger("coze_server")
+        logger_tmp.info(f".env loaded from {env_path}")
+except ImportError:
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

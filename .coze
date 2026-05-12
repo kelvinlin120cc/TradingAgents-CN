@@ -1,0 +1,10 @@
+[project]
+requires = ["python-3.10"]
+
+[dev]
+build = ["bash", "-c", "pip install --prefer-binary fastapi uvicorn pydantic pydantic-settings python-dotenv pymongo redis 2>&1 | tail -5"]
+run = ["bash", "start_coze.sh"]
+
+[deploy]
+build = ["bash", "-c", "pip install --prefer-binary -e . 2>&1 | tail -5"]
+run = ["bash", "start_coze.sh"]

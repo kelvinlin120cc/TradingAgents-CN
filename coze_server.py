@@ -125,6 +125,10 @@ def start_fallback_server():
     async def healthz():
         return {"status": "ok", "mode": "degraded"}
 
+    @app.get("/readyz")
+    async def readyz():
+        return {"status": "ok", "mode": "degraded"}
+
     @app.get("/api/status")
     async def api_status():
         return JSONResponse(

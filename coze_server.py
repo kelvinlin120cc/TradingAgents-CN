@@ -154,9 +154,32 @@ def start_fallback_server():
         version=get_version(),
     )
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index():
-        return HTMLResponse(content=_build_status_page())
+    # 尝试提供 Vue.js 前端（如果已构建）
+    _frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+
+    if os.path.exists(os.path.join(_frontend_dist, "index.html")):
+        from fastapi.staticfiles import StaticFiles
+
+        @app.get("/", response_class=HTMLResponse)
+        async def index():
+            with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
+                return HTMLResponse(content=f.read())
+
+        app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
+
+        @app.get("/{path:path}", response_class=HTMLResponse)
+        async def spa_fallback(path: str):
+            """SPA catch-all: 前端路由回退到 index.html"""
+            file_path = os.path.join(_frontend_dist, path)
+            if os.path.isfile(file_path):
+                from fastapi.responses import FileResponse
+                return FileResponse(file_path)
+            with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
+                return HTMLResponse(content=f.read())
+    else:
+        @app.get("/", response_class=HTMLResponse)
+        async def index():
+            return HTMLResponse(content=_build_status_page())
 
     @app.get("/health")
     async def health():

@@ -16,7 +16,8 @@ For commercial licensing, please contact: hsliup@163.com
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import logging
 import time
@@ -730,16 +731,65 @@ app.include_router(social_media.router, tags=["social-media"])
 app.include_router(internal_messages.router, tags=["internal-messages"])
 
 
-@app.get("/")
-async def root():
-    """根路径，返回API信息"""
-    print("🏠 根路径被访问")
-    return {
-        "name": "TradingAgents-CN API",
-        "version": get_version(),
-        "status": "running",
-        "docs_url": "/docs" if settings.DEBUG else None
-    }
+# ===== Vue.js 前端静态文件服务 =====
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+
+if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    # 挂载静态资源子目录（Vite 构建产物: js/, css/, img/ 等）
+    for static_subdir in ["assets", "js", "css", "img", "fonts", "icons"]:
+        subdir = FRONTEND_DIST / static_subdir
+        if subdir.exists():
+            app.mount(f"/{static_subdir}", StaticFiles(directory=subdir), name=f"frontend-{static_subdir}")
+
+    # 根路径返回前端 index.html
+    @app.get("/")
+    async def serve_frontend_index():
+        """根路径，返回 Vue.js 前端页面"""
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+    # SPA 中间件：处理前端路由（仅当 API 路由不匹配时）
+    class SPAFallbackMiddleware(BaseHTTPMiddleware):
+        """中间件：非 API/静态文件请求回退到 index.html（SPA 路由支持）"""
+        async def dispatch(self, request, call_next):
+            response = await call_next(request)
+            # 只处理 404 响应且是 GET 请求
+            if response.status_code == 404 and request.method == "GET":
+                path = request.url.path.lstrip("/")
+                # 排除已知后端路由路径
+                excluded_prefixes = (
+                    "api/",           # API 路由
+                    "docs",           # Swagger UI
+                    "openapi",        # OpenAPI JSON
+                    "redoc",          # ReDoc 文档
+                    "health",         # 健康检查
+                    "healthz",        # K8s 存活探针
+                    "readyz",         # K8s 就绪探针
+                )
+                if not any(path.startswith(p) for p in excluded_prefixes):
+                    # 优先检查是否是前端静态文件（js/css/img 等）
+                    file_path = FRONTEND_DIST / path
+                    if file_path.exists() and file_path.is_file():
+                        return FileResponse(file_path)
+                    # SPA fallback：返回 index.html
+                    return FileResponse(FRONTEND_DIST / "index.html")
+            return response
+
+    app.add_middleware(SPAFallbackMiddleware)
+    logger.info(f"✅ Vue.js 前端已挂载: {FRONTEND_DIST}")
+else:
+    @app.get("/")
+    async def root():
+        """根路径，返回API信息（前端未构建时的降级响应）"""
+        return {
+            "name": "TradingAgents-CN API",
+            "version": get_version(),
+            "status": "running",
+            "docs_url": "/docs" if settings.DEBUG else None,
+            "hint": "Vue.js frontend not built. Run: cd frontend && yarn build"
+        }
+    logger.info("⚠️ Vue.js 前端未构建，仅 API 模式运行")
 
 
 if __name__ == "__main__":

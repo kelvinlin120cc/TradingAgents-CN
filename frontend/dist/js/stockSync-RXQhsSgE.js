@@ -1,0 +1,1 @@
+import{aq as s}from"./index-_cBqUdBD.js";const e={syncSingle(t){return s.post("/api/stock-sync/single",t,{timeout:12e4})},syncBatch(t){return s.post("/api/stock-sync/batch",t,{timeout:3e5})},getStatus(t){return s.get(`/api/stock-sync/status/${t}`)}};export{e as s};

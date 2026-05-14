@@ -80,6 +80,43 @@ def check_redis_available() -> bool:
         return False
 
 
+def ensure_admin_user():
+    """确保管理员用户存在（首次启动时自动创建）"""
+    try:
+        import hashlib
+        from pymongo import MongoClient
+
+        mongo_host = os.environ.get("MONGODB_HOST", "localhost")
+        mongo_port = int(os.environ.get("MONGODB_PORT", "27017"))
+        mongo_db = os.environ.get("MONGODB_DATABASE", "tradingagentscn")
+
+        client = MongoClient(mongo_host, mongo_port, serverSelectionTimeoutMS=3000)
+        db = client[mongo_db]
+
+        # 检查是否已有管理员
+        admin = db.users.find_one({"username": "admin"})
+        if admin:
+            logger.info("Admin user already exists.")
+            return
+
+        # 创建管理员
+        password = os.environ.get("ADMIN_PASSWORD", "Admin123456")
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        admin_user = {
+            "username": "admin",
+            "email": "admin@tradingagents.cn",
+            "hashed_password": hashed_password,
+            "role": "admin",
+            "is_active": True,
+        }
+
+        db.users.insert_one(admin_user)
+        logger.info(f"Admin user created. Username: admin, Password: {password}")
+    except Exception as e:
+        logger.warning(f"Failed to create admin user: {e}")
+
+
 def start_full_backend():
     """启动完整后端（需要 MongoDB + Redis）"""
     import uvicorn
@@ -92,6 +129,9 @@ def start_full_backend():
     logger.info(f"Starting FULL backend on {host}:{port}")
     logger.info(f"MongoDB: {settings.MONGODB_HOST}:{settings.MONGODB_PORT}")
     logger.info(f"Redis: {settings.REDIS_HOST}:{settings.REDIS_PORT}")
+
+    # 自动初始化管理员用户
+    ensure_admin_user()
 
     uvicorn_config = DEV_CONFIG.get_uvicorn_config(settings.DEBUG)
     uvicorn.run(

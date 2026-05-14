@@ -777,7 +777,7 @@ if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
             return response
 
     app.add_middleware(SPAFallbackMiddleware)
-    logger.info(f"✅ Vue.js 前端已挂载: {FRONTEND_DIST}")
+    logging.info(f"✅ Vue.js 前端已挂载: {FRONTEND_DIST}")
 else:
     @app.get("/")
     async def root():
@@ -789,7 +789,7 @@ else:
             "docs_url": "/docs" if settings.DEBUG else None,
             "hint": "Vue.js frontend not built. Run: cd frontend && yarn build"
         }
-    logger.info("⚠️ Vue.js 前端未构建，仅 API 模式运行")
+    logging.info("⚠️ Vue.js 前端未构建，仅 API 模式运行")
 
 
 if __name__ == "__main__":

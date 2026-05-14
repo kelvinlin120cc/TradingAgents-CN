@@ -159,6 +159,7 @@ def start_fallback_server():
 
     if os.path.exists(os.path.join(_frontend_dist, "index.html")):
         from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import FileResponse
 
         @app.get("/", response_class=HTMLResponse)
         async def index():
@@ -167,13 +168,20 @@ def start_fallback_server():
 
         app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
 
+        # 排除 API 路径，防止 SPA fallback 拦截 API 请求
+        _excluded_prefixes = ("api/", "docs", "openapi", "redoc", "health", "healthz", "readyz", "ws")
+
         @app.get("/{path:path}", response_class=HTMLResponse)
         async def spa_fallback(path: str):
-            """SPA catch-all: 前端路由回退到 index.html"""
+            """SPA catch-all: 前端路由回退到 index.html（排除 API 路径）"""
+            # 排除 API 和后端路由
+            if any(path.startswith(p) for p in _excluded_prefixes):
+                return JSONResponse(content={"detail": "Not Found"}, status_code=404)
+            # 先检查是否是静态文件
             file_path = os.path.join(_frontend_dist, path)
             if os.path.isfile(file_path):
-                from fastapi.responses import FileResponse
                 return FileResponse(file_path)
+            # SPA fallback
             with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
                 return HTMLResponse(content=f.read())
     else:
@@ -183,6 +191,24 @@ def start_fallback_server():
 
     @app.get("/health")
     async def health():
+        return JSONResponse(
+            content={
+                "success": True,
+                "data": {
+                    "status": "degraded",
+                    "version": get_version(),
+                    "timestamp": int(time.time()),
+                    "service": "TradingAgents-CN API (Degraded)",
+                    "mongodb": "unavailable",
+                    "redis": "unavailable",
+                },
+                "message": "服务运行在降级模式，请配置 MongoDB 和 Redis",
+            }
+        )
+
+    @app.get("/api/health")
+    async def api_health():
+        """前端调用的 /api/health 端点"""
         return JSONResponse(
             content={
                 "success": True,

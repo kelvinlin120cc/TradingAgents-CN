@@ -1,10 +1,10 @@
 [project]
-requires = ["python-3.10", "nodejs-24"]
+requires = ["python-3.10"]
 
 [dev]
-build = ["bash", "-c", "pip install --prefer-binary fastapi uvicorn pydantic pydantic-settings python-dotenv pymongo redis motor bcrypt passlib 'python-jose[cryptography]' python-multipart aiofiles httpx sse-starlette apscheduler loguru toml questionary stockstats chromadb tushare akshare baostock yfinance 'langchain>=0.3' 'langchain-openai>=0.3' 'langchain-experimental' dashscope feedparser finnhub-python concurrent-log-handler 'starlette>=0.40.0,<0.49.0' 2>&1 | tail -5 && cd frontend && yarn install && npx vite build 2>&1 | tail -5"]
+build = ["bash", "-c", "pip install --prefer-binary fastapi uvicorn pydantic pydantic-settings python-dotenv pymongo redis motor bcrypt passlib 'python-jose[cryptography]' python-multipart aiofiles httpx sse-starlette apscheduler loguru toml questionary stockstats chromadb tushare akshare baostock yfinance 'langchain>=0.3' 'langchain-openai>=0.3' 'langchain-experimental' dashscope feedparser finnhub-python concurrent-log-handler 'starlette>=0.40.0,<0.49.0' 2>&1 | tail -3 && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>/dev/null && apt-get install -y -qq nodejs 2>/dev/null && npm install -g yarn 2>/dev/null && cd frontend && yarn install 2>&1 | tail -3 && npx vite build 2>&1 | tail -3"]
 run = ["bash", "start_coze.sh"]
 
 [deploy]
-build = ["bash", "-c", "pip install --prefer-binary fastapi uvicorn pydantic pydantic-settings python-dotenv pymongo redis motor bcrypt passlib 'python-jose[cryptography]' python-multipart aiofiles httpx sse-starlette apscheduler loguru toml questionary stockstats chromadb tushare akshare baostock yfinance 'langchain>=0.3' 'langchain-openai>=0.3' 'langchain-experimental' dashscope feedparser finnhub-python concurrent-log-handler 'starlette>=0.40.0,<0.49.0' 2>&1 | tail -5 && cd frontend && yarn install && npx vite build 2>&1 | tail -5"]
+build = ["bash", "-c", "pip install --prefer-binary fastapi uvicorn pydantic pydantic-settings python-dotenv pymongo redis motor bcrypt passlib 'python-jose[cryptography]' python-multipart aiofiles httpx sse-starlette apscheduler loguru toml questionary stockstats chromadb tushare akshare baostock yfinance 'langchain>=0.3' 'langchain-openai>=0.3' 'langchain-experimental' dashscope feedparser finnhub-python concurrent-log-handler 'starlette>=0.40.0,<0.49.0' 2>&1 | tail -3 && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - 2>/dev/null && apt-get install -y -qq nodejs 2>/dev/null && npm install -g yarn 2>/dev/null && cd frontend && yarn install 2>&1 | tail -3 && npx vite build 2>&1 | tail -3"]
 run = ["bash", "start_coze.sh"]

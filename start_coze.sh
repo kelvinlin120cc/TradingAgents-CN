@@ -124,6 +124,6 @@ fi
 # ============================================================================
 echo "[INFO] Starting TradingAgents-CN backend on port $PORT ..."
 
-# 使用 python 启动，确保 PORT 环境变量被 FastAPI 读取
+# 使用 python3 启动，确保 PORT 环境变量被 FastAPI 读取
 # 将 stderr 合并到 stdout，避免日志级别误标记
-python coze_server.py 2>&1
+python3 coze_server.py 2>&1

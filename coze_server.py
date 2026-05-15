@@ -154,41 +154,7 @@ def start_fallback_server():
         version=get_version(),
     )
 
-    # 尝试提供 Vue.js 前端（如果已构建）
-    _frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
-
-    if os.path.exists(os.path.join(_frontend_dist, "index.html")):
-        from fastapi.staticfiles import StaticFiles
-        from fastapi.responses import FileResponse
-
-        @app.get("/", response_class=HTMLResponse)
-        async def index():
-            with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
-                return HTMLResponse(content=f.read())
-
-        app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
-
-        # 排除 API 路径，防止 SPA fallback 拦截 API 请求
-        _excluded_prefixes = ("api/", "docs", "openapi", "redoc", "health", "healthz", "readyz", "ws")
-
-        @app.get("/{path:path}", response_class=HTMLResponse)
-        async def spa_fallback(path: str):
-            """SPA catch-all: 前端路由回退到 index.html（排除 API 路径）"""
-            # 排除 API 和后端路由
-            if any(path.startswith(p) for p in _excluded_prefixes):
-                return JSONResponse(content={"detail": "Not Found"}, status_code=404)
-            # 先检查是否是静态文件
-            file_path = os.path.join(_frontend_dist, path)
-            if os.path.isfile(file_path):
-                return FileResponse(file_path)
-            # SPA fallback
-            with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
-                return HTMLResponse(content=f.read())
-    else:
-        @app.get("/", response_class=HTMLResponse)
-        async def index():
-            return HTMLResponse(content=_build_status_page())
-
+    # ===== API 路由（必须在 SPA catch-all 之前注册） =====
     @app.get("/health")
     async def health():
         return JSONResponse(
@@ -249,6 +215,58 @@ def start_fallback_server():
                 "message": "请配置 .env 文件中的 MONGODB_HOST、REDIS_HOST 等连接信息",
             }
         )
+
+    @app.get("/api/system/config/validate")
+    async def config_validate():
+        """前端启动时调用的配置验证端点"""
+        return JSONResponse(
+            content={
+                "success": True,
+                "data": {
+                    "status": "degraded",
+                    "version": get_version(),
+                    "mongodb": "unavailable",
+                    "redis": "unavailable",
+                    "openai_configured": bool(os.environ.get("CUSTOM_OPENAI_API_KEY", "")),
+                    "tushare_configured": bool(os.environ.get("TUSHARE_TOKEN", "")),
+                },
+            }
+        )
+
+    # ===== 前端路由 =====
+    # 尝试提供 Vue.js 前端（如果已构建）
+    _frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+
+    if os.path.exists(os.path.join(_frontend_dist, "index.html")):
+        from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import FileResponse
+
+        @app.get("/", response_class=HTMLResponse)
+        async def index():
+            with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
+                return HTMLResponse(content=f.read())
+
+        app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="assets")
+
+        # SPA catch-all 必须放在所有 API 路由之后
+        @app.get("/{path:path}", response_class=HTMLResponse)
+        async def spa_fallback(path: str):
+            """SPA catch-all: 前端路由回退到 index.html（排除 API 路径）"""
+            # 排除 API 和后端路由（双重保护）
+            _excluded_prefixes = ("api/", "docs", "openapi", "redoc", "health", "healthz", "readyz", "ws")
+            if any(path.startswith(p) for p in _excluded_prefixes):
+                return JSONResponse(content={"detail": "Not Found"}, status_code=404)
+            # 先检查是否是静态文件
+            file_path = os.path.join(_frontend_dist, path)
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+            # SPA fallback
+            with open(os.path.join(_frontend_dist, "index.html"), "r") as f:
+                return HTMLResponse(content=f.read())
+    else:
+        @app.get("/", response_class=HTMLResponse)
+        async def index():
+            return HTMLResponse(content=_build_status_page())
 
     port = int(os.environ.get("PORT", "5000"))
     host = os.environ.get("HOST", "0.0.0.0")

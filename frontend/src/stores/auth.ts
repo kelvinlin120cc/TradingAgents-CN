@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { authApi } from '@/api/auth'
 import type { User, LoginForm, RegisterForm } from '@/types/auth'
+import { ElMessage } from 'element-plus'
 
 export interface AuthState {
   // 认证状态

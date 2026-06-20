@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 
 _ALIASES = {
@@ -55,6 +56,7 @@ def env_key_for_provider(provider: str) -> str:
         "siliconflow": "SILICONFLOW_API_KEY",
         "qianfan": "QIANFAN_API_KEY",
         "glm": "ZHIPU_API_KEY",
+        "custom_openai": "CUSTOM_OPENAI_API_KEY",
     }
     return env_key_map.get(key, "")
 
@@ -73,6 +75,7 @@ def default_backend_url(provider: str) -> str:
         "qianfan": "https://qianfan.baidubce.com/v2",
         "siliconflow": "https://api.siliconflow.cn/v1",
         "glm": "https://open.bigmodel.cn/api/paas/v4/",
+        "custom_openai": os.getenv("CUSTOM_OPENAI_BASE_URL", "https://api.openai.com/v1"),
     }
     return default_urls.get(key, "https://dashscope.aliyuncs.com/compatible-mode/v1")
 

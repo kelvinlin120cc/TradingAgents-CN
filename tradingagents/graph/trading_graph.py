@@ -274,19 +274,24 @@ class TradingAgentsGraph:
             logger.info(f"🔧 [{provider}-快速模型] max_tokens={quick_max_tokens}, temperature={quick_temperature}, timeout={quick_timeout}s")
             logger.info(f"🔧 [{provider}-深度模型] max_tokens={deep_max_tokens}, temperature={deep_temperature}, timeout={deep_timeout}s")
 
-            api_key = None
-            if provider == "siliconflow":
-                api_key = os.getenv('SILICONFLOW_API_KEY')
-                if not api_key:
-                    raise ValueError("使用SiliconFlow需要设置SILICONFLOW_API_KEY环境变量")
-            elif provider == "openrouter":
-                api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
-                if not api_key:
-                    raise ValueError("使用OpenRouter需要设置OPENROUTER_API_KEY或OPENAI_API_KEY环境变量")
-            elif provider == "aihubmix":
-                api_key = os.getenv('AIHUBMIX_API_KEY')
-                if not api_key:
-                    raise ValueError("使用AiHubMix需要设置AIHUBMIX_API_KEY环境变量")
+            api_key = self.config.get("quick_api_key") or self.config.get("deep_api_key")  # 🔥 优先使用配置中的API Key
+            if not api_key:
+                if provider == "siliconflow":
+                    api_key = os.getenv('SILICONFLOW_API_KEY')
+                    if not api_key:
+                        raise ValueError("使用SiliconFlow需要设置SILICONFLOW_API_KEY环境变量")
+                elif provider == "openrouter":
+                    api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
+                    if not api_key:
+                        raise ValueError("使用OpenRouter需要设置OPENROUTER_API_KEY或OPENAI_API_KEY环境变量")
+                elif provider == "aihubmix":
+                    api_key = os.getenv('AIHUBMIX_API_KEY')
+                    if not api_key:
+                        raise ValueError("使用AiHubMix需要设置AIHUBMIX_API_KEY环境变量")
+                else:
+                    env_key = env_key_for_provider(provider)
+                    if env_key:
+                        api_key = os.getenv(env_key)
 
             self.deep_thinking_llm, self.quick_thinking_llm = _create_provider_pair(
                 provider=provider,
@@ -390,11 +395,12 @@ class TradingAgentsGraph:
             )
             logger.info("✅ [DeepSeek] 已通过 llm_clients 初始化成功并应用用户配置的模型参数")
         elif normalized_provider == "custom_openai":
-            custom_api_key = os.getenv('CUSTOM_OPENAI_API_KEY')
+            # 🔥 优先使用配置中的API Key和Base URL（前端传递的），其次使用环境变量
+            custom_api_key = self.config.get("quick_api_key") or self.config.get("deep_api_key") or os.getenv('CUSTOM_OPENAI_API_KEY')
             if not custom_api_key:
                 raise ValueError("使用自定义OpenAI端点需要设置CUSTOM_OPENAI_API_KEY环境变量")
 
-            custom_base_url = self.config.get("custom_openai_base_url", "https://api.openai.com/v1")
+            custom_base_url = self.config.get("quick_backend_url") or self.config.get("backend_url") or os.getenv('CUSTOM_OPENAI_BASE_URL', "https://api.openai.com/v1")
             logger.info(f"🔧 [自定义OpenAI] 使用端点: {custom_base_url}")
             self.deep_thinking_llm, self.quick_thinking_llm = _create_provider_pair(
                 provider="custom_openai",

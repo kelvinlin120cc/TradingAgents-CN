@@ -717,6 +717,7 @@ import { marked } from 'marked'
 import { recommendModels } from '@/api/modelCapabilities'
 import { validateStockCode, getStockCodeFormatHelp } from '@/utils/stockValidator'
 import { normalizeMarketForAnalysis, getMarketByStockCode } from '@/utils/market'
+import { getPreference, setPreference, PREFERENCE_KEYS } from '@/utils/preferences'
 
 // 配置marked选项
 marked.setOptions({
@@ -948,7 +949,12 @@ const submitAnalysis = async () => {
         include_risk: analysisForm.includeRisk,
         language: analysisForm.language,
         quick_analysis_model: modelSettings.value.quickAnalysisModel,
-        deep_analysis_model: modelSettings.value.deepAnalysisModel
+        deep_analysis_model: modelSettings.value.deepAnalysisModel,
+        // 传递provider信息，避免后端回退到错误的默认映射
+        quick_provider: availableModels.value.find(m => m.model_name === modelSettings.value.quickAnalysisModel)?.provider || '',
+        deep_provider: availableModels.value.find(m => m.model_name === modelSettings.value.deepAnalysisModel)?.provider || '',
+        quick_backend_url: availableModels.value.find(m => m.model_name === modelSettings.value.quickAnalysisModel)?.api_base || '',
+        deep_backend_url: availableModels.value.find(m => m.model_name === modelSettings.value.deepAnalysisModel)?.api_base || ''
       }
     }
 
@@ -1890,14 +1896,55 @@ const initializeModelSettings = async () => {
 
     // 获取默认模型
     const defaultModels = await configApi.getDefaultModels()
-    modelSettings.value.quickAnalysisModel = defaultModels.quick_analysis_model
-    modelSettings.value.deepAnalysisModel = defaultModels.deep_analysis_model
+    const serverQuickModel = defaultModels.quick_analysis_model
+    const serverDeepModel = defaultModels.deep_analysis_model
 
     // 获取所有可用的模型列表
     const llmConfigs = await configApi.getLLMConfigs()
     availableModels.value = sortModelsByNewest(
       llmConfigs.filter((config: any) => config.enabled)
     )
+
+    // 🔥 优先从 localStorage 读取上次保存的模型配置（用户偏好）
+    const savedQuickModel = getPreference<string>(PREFERENCE_KEYS.QUICK_ANALYSIS_MODEL, '')
+    const savedDeepModel = getPreference<string>(PREFERENCE_KEYS.DEEP_ANALYSIS_MODEL, '')
+
+    // 调试：检查 localStorage 的内容
+    console.log('🔍 [调试] localStorage 内容:')
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('tradingagents_')) {
+        console.log(`  - ${key}: ${localStorage.getItem(key)}`)
+      }
+    }
+    console.log('🔍 [调试] 读取的 savedQuickModel:', savedQuickModel, 'savedDeepModel:', savedDeepModel)
+
+    // 验证保存的模型是否在可用列表中
+    const isModelAvailable = (modelName: string) => {
+      return availableModels.value.some(m => m.model_name === modelName)
+    }
+
+    if (savedQuickModel && isModelAvailable(savedQuickModel)) {
+      modelSettings.value.quickAnalysisModel = savedQuickModel
+      console.log('💾 [用户偏好] 使用保存的快速分析模型:', savedQuickModel)
+    } else {
+      modelSettings.value.quickAnalysisModel = serverQuickModel
+      // 如果保存的模型已不可用，清除保存的偏好
+      if (savedQuickModel) {
+        console.log('⚠️ [用户偏好] 保存的快速分析模型不可用，使用服务器默认:', serverQuickModel)
+      }
+    }
+
+    if (savedDeepModel && isModelAvailable(savedDeepModel)) {
+      modelSettings.value.deepAnalysisModel = savedDeepModel
+      console.log('💾 [用户偏好] 使用保存的深度决策模型:', savedDeepModel)
+    } else {
+      modelSettings.value.deepAnalysisModel = serverDeepModel
+      // 如果保存的模型已不可用，清除保存的偏好
+      if (savedDeepModel) {
+        console.log('⚠️ [用户偏好] 保存的深度决策模型不可用，使用服务器默认:', serverDeepModel)
+      }
+    }
 
     console.log('✅ 加载模型配置成功:', {
       quick: modelSettings.value.quickAnalysisModel,
@@ -2181,7 +2228,16 @@ watch(() => analysisForm.researchDepth, () => {
 })
 
 // 监听模型选择变化
-watch([() => modelSettings.value.quickAnalysisModel, () => modelSettings.value.deepAnalysisModel], () => {
+watch([() => modelSettings.value.quickAnalysisModel, () => modelSettings.value.deepAnalysisModel], ([newQuick, newDeep], [oldQuick, oldDeep]) => {
+  // 🔥 实时保存到 localStorage，实现"记住上次配置"
+  if (newQuick !== oldQuick) {
+    setPreference(PREFERENCE_KEYS.QUICK_ANALYSIS_MODEL, newQuick)
+    console.log('💾 [用户偏好] 已保存快速分析模型:', newQuick)
+  }
+  if (newDeep !== oldDeep) {
+    setPreference(PREFERENCE_KEYS.DEEP_ANALYSIS_MODEL, newDeep)
+    console.log('💾 [用户偏好] 已保存深度决策模型:', newDeep)
+  }
   checkModelSuitability()
 })
 

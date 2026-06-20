@@ -35,6 +35,15 @@ except ImportError:
     get_fundamentals_snapshot = None
     FUNDAMENTALS_SNAPSHOT_AVAILABLE = False
 
+# 导入问财提供器
+try:
+    from .wencai_provider import WencaiProvider, get_wencai_provider
+    WENCAI_AVAILABLE = True
+except ImportError:
+    WencaiProvider = None
+    get_wencai_provider = None
+    WENCAI_AVAILABLE = False
+
 __all__ = [
     'AKShareProvider',
     'AKSHARE_AVAILABLE',
@@ -42,6 +51,9 @@ __all__ = [
     'TUSHARE_AVAILABLE',
     'BaostockProvider',
     'BAOSTOCK_AVAILABLE',
+    'WencaiProvider',
+    'get_wencai_provider',
+    'WENCAI_AVAILABLE',
     'get_fundamentals_snapshot',
     'FUNDAMENTALS_SNAPSHOT_AVAILABLE',
 ]

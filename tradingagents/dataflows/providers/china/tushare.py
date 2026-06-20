@@ -738,7 +738,23 @@ class TushareProvider(BaseStockDataProvider):
             except Exception as e:
                 self.logger.warning(f"❌ 获取{ts_code}财务指标数据失败: {e}")
 
-            # 5. 获取主营业务构成数据 (可选)
+            # 5. 获取每日估值指标数据（PE/PB/市值等）
+            try:
+                daily_basic_df = await asyncio.to_thread(
+                    self.api.daily_basic,
+                    ts_code=ts_code,
+                    fields='ts_code,trade_date,close,pe,pe_ttm,pb,total_mv,circ_mv',
+                    limit=1
+                )
+                if daily_basic_df is not None and not daily_basic_df.empty:
+                    financial_data['daily_basic'] = daily_basic_df.to_dict('records')
+                    self.logger.debug(f"✅ {ts_code} 每日估值指标获取成功: {len(daily_basic_df)} 条记录")
+                else:
+                    self.logger.debug(f"⚠️ {ts_code} 每日估值指标为空")
+            except Exception as e:
+                self.logger.warning(f"❌ 获取{ts_code}每日估值指标失败: {e}")
+
+            # 6. 获取主营业务构成数据 (可选)
             try:
                 mainbz_df = await asyncio.to_thread(
                     self.api.fina_mainbz,
@@ -1325,6 +1341,11 @@ class TushareProvider(BaseStockDataProvider):
             latest_balance = financial_data.get('balance_sheet', [{}])[0] if financial_data.get('balance_sheet') else {}
             latest_cashflow = financial_data.get('cashflow_statement', [{}])[0] if financial_data.get('cashflow_statement') else {}
             latest_indicator = financial_data.get('financial_indicators', [{}])[0] if financial_data.get('financial_indicators') else {}
+            latest_daily_basic = financial_data.get('daily_basic', [{}])[0] if financial_data.get('daily_basic') else {}
+
+            pe_ttm = self._safe_float(latest_daily_basic.get('pe_ttm'))
+            netprofit_yoy = self._safe_float(latest_indicator.get('netprofit_yoy'))
+            peg = pe_ttm / netprofit_yoy if pe_ttm and netprofit_yoy and netprofit_yoy > 0 else None
 
             # 提取基础信息
             symbol = ts_code.split('.')[0] if '.' in ts_code else ts_code
@@ -1401,6 +1422,20 @@ class TushareProvider(BaseStockDataProvider):
                 "current_ratio": self._safe_float(latest_indicator.get('current_ratio')),  # 流动比率
                 "quick_ratio": self._safe_float(latest_indicator.get('quick_ratio')),  # 速动比率
                 "cash_ratio": self._safe_float(latest_indicator.get('cash_ratio')),  # 现金比率
+                "netprofit_yoy": netprofit_yoy,  # 归母净利润同比增长率
+                "or_yoy": self._safe_float(latest_indicator.get('or_yoy')),  # 营业收入同比增长率
+                "eps": self._safe_float(latest_indicator.get('eps')),  # 每股收益
+                "bps": self._safe_float(latest_indicator.get('bps')),  # 每股净资产
+
+                # 估值指标（来自 daily_basic）
+                "trade_date": latest_daily_basic.get('trade_date'),
+                "close": self._safe_float(latest_daily_basic.get('close')),
+                "pe": self._safe_float(latest_daily_basic.get('pe')),
+                "pe_ttm": pe_ttm,
+                "pb": self._safe_float(latest_daily_basic.get('pb')),
+                "peg": peg,
+                "total_mv": self._safe_float(latest_daily_basic.get('total_mv')),  # 万元
+                "circ_mv": self._safe_float(latest_daily_basic.get('circ_mv')),  # 万元
 
                 # 原始数据保留（用于详细分析）
                 "raw_data": {
@@ -1408,6 +1443,7 @@ class TushareProvider(BaseStockDataProvider):
                     "balance_sheet": financial_data.get('balance_sheet', []),
                     "cashflow_statement": financial_data.get('cashflow_statement', []),
                     "financial_indicators": financial_data.get('financial_indicators', []),
+                    "daily_basic": financial_data.get('daily_basic', []),
                     "main_business": financial_data.get('main_business', [])
                 },
 

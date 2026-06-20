@@ -51,6 +51,11 @@ class AnalysisParameters(BaseModel):
     # 模型配置
     quick_analysis_model: Optional[str] = "qwen-turbo"
     deep_analysis_model: Optional[str] = "qwen-max"
+    # 模型供应商配置（前端传递，避免后端回退到错误的默认映射）
+    quick_provider: Optional[str] = None
+    deep_provider: Optional[str] = None
+    quick_backend_url: Optional[str] = None
+    deep_backend_url: Optional[str] = None
 
 
 class AnalysisResult(BaseModel):

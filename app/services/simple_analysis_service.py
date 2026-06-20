@@ -336,6 +336,45 @@ def _get_default_backend_url(provider: str) -> str:
     return url
 
 
+def _get_api_key_from_llm_providers(provider: str) -> str:
+    """
+    从数据库的 llm_providers 集合获取指定供应商的 API Key
+
+    Args:
+        provider: 供应商名称
+
+    Returns:
+        str: API Key，如果未找到则返回 None
+    """
+    try:
+        from pymongo import MongoClient
+        from app.core.config import settings
+
+        client = MongoClient(settings.MONGO_URI)
+        db = client[settings.MONGO_DB]
+        providers_collection = db.llm_providers
+
+        # 尝试精确匹配
+        provider_doc = providers_collection.find_one({"name": provider})
+        if not provider_doc:
+            # 尝试使用 normalized key 匹配
+            from tradingagents.llm_clients.provider_keys import normalize_provider_key
+            normalized = normalize_provider_key(provider)
+            provider_doc = providers_collection.find_one({"name": normalized})
+
+        if provider_doc and provider_doc.get("api_key"):
+            api_key = provider_doc["api_key"]
+            if api_key and api_key.strip() and api_key != "your-api-key":
+                client.close()
+                return api_key
+
+        client.close()
+    except Exception as e:
+        logger.warning(f"⚠️ 从llm_providers获取API Key失败: {e}")
+
+    return None
+
+
 def _get_default_provider_by_model(model_name: str) -> str:
     """
     根据模型名称返回默认的供应商映射
@@ -1183,13 +1222,50 @@ class SimpleAnalysisService:
                 logger.info(f"🤖 自动推荐模型: quick={quick_model}, deep={deep_model}")
 
             # 🔧 根据快速模型和深度模型分别查找对应的供应商和 API URL
-            quick_provider_info = get_provider_and_url_by_model_sync(quick_model)
-            deep_provider_info = get_provider_and_url_by_model_sync(deep_model)
+            # 🔥 优先使用前端传递的provider信息，避免回退到错误的默认映射
+            quick_provider_from_frontend = getattr(request.parameters, 'quick_provider', None) if request.parameters else None
+            deep_provider_from_frontend = getattr(request.parameters, 'deep_provider', None) if request.parameters else None
+            quick_backend_url_from_frontend = getattr(request.parameters, 'quick_backend_url', None) if request.parameters else None
+            deep_backend_url_from_frontend = getattr(request.parameters, 'deep_backend_url', None) if request.parameters else None
 
-            quick_provider = quick_provider_info["provider"]
-            deep_provider = deep_provider_info["provider"]
-            quick_backend_url = quick_provider_info["backend_url"]
-            deep_backend_url = deep_provider_info["backend_url"]
+            if quick_provider_from_frontend and deep_provider_from_frontend:
+                # 前端传递了provider信息，直接使用
+                quick_provider = quick_provider_from_frontend
+                deep_provider = deep_provider_from_frontend
+                quick_backend_url = quick_backend_url_from_frontend or ""
+                deep_backend_url = deep_backend_url_from_frontend or ""
+
+                # 🔥 使用前端传递的provider获取API Key（而不是后端查询的provider）
+                quick_api_key = _get_env_api_key_for_provider(quick_provider)
+                deep_api_key = _get_env_api_key_for_provider(deep_provider)
+
+                # 如果环境变量中没有API Key，尝试从数据库的llm_providers集合获取
+                if not quick_api_key:
+                    quick_api_key = _get_api_key_from_llm_providers(quick_provider)
+                if not deep_api_key:
+                    deep_api_key = _get_api_key_from_llm_providers(deep_provider)
+
+                # 如果前端没有传递backend_url，使用默认URL
+                if not quick_backend_url:
+                    quick_backend_url = _get_default_backend_url(quick_provider)
+                if not deep_backend_url:
+                    deep_backend_url = _get_default_backend_url(deep_provider)
+
+                logger.info(f"🔥 [前端Provider] 使用前端传递的provider: quick={quick_provider}, deep={deep_provider}")
+                logger.info(f"🔥 [API Key] quick={'已获取' if quick_api_key else '未找到'}, deep={'已获取' if deep_api_key else '未找到'}")
+            else:
+                # 前端没有传递provider信息，使用后端查询
+                quick_provider_info = get_provider_and_url_by_model_sync(quick_model)
+                deep_provider_info = get_provider_and_url_by_model_sync(deep_model)
+
+                quick_provider = quick_provider_info["provider"]
+                deep_provider = deep_provider_info["provider"]
+                quick_backend_url = quick_provider_info["backend_url"]
+                deep_backend_url = deep_provider_info["backend_url"]
+                quick_api_key = quick_provider_info.get("api_key")
+                deep_api_key = deep_provider_info.get("api_key")
+
+                logger.info(f"🔍 [后端查询] 使用后端查询的provider: quick={quick_provider}, deep={deep_provider}")
 
             logger.info(f"🔍 [供应商查找] 快速模型 {quick_model} 对应的供应商: {quick_provider}")
             logger.info(f"🔍 [API地址] 快速模型使用 backend_url: {quick_backend_url}")
@@ -1222,6 +1298,12 @@ class SimpleAnalysisService:
             config["quick_backend_url"] = quick_backend_url
             config["deep_backend_url"] = deep_backend_url
             config["backend_url"] = quick_backend_url  # 保持向后兼容
+
+            # 🔥 添加API Key配置（优先使用前端provider对应的Key）
+            if quick_api_key:
+                config["quick_api_key"] = quick_api_key
+            if deep_api_key:
+                config["deep_api_key"] = deep_api_key
 
             # 🔍 验证配置中的模型
             logger.info(f"🔍 [模型验证] 配置中的快速模型: {config.get('quick_think_llm')}")

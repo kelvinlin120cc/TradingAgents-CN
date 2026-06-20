@@ -1,3 +1,5 @@
+version: '3.8'
+
 # TradingAgents-CN v1.0.1 Docker Compose配置（带 Nginx 反向代理）
 # 使用Docker Hub镜像 + Nginx 反向代理
 #
@@ -64,20 +66,19 @@ services:
     # 本地构建: docker-compose -f docker-compose.hub.nginx.yml build backend
     # 拉取镜像: docker-compose -f docker-compose.hub.nginx.yml pull backend
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.backend
-    image: hsliup/tradingagents-backend:v1.0.1
+    image: hsliup/tradingagents-backend:latest
     container_name: tradingagents-backend
     restart: unless-stopped
     expose:
       - "8000"
     volumes:
       - ./logs:/app/logs
+      - ../tradingagents:/app/tradingagents
+      - ../app:/app/app
       - ./data:/app/data
-      - ./app:/app/app:ro              # 后端代码实时同步
-      - ./tradingagents:/app/tradingagents:ro  # 核心库实时同步
-      - ./.env:/app/.env:ro
-
+      - ./.env:/app/.env:ro 
     env_file:
       - .env
     environment:
@@ -133,7 +134,6 @@ services:
       BAOSTOCK_ENABLED: "${BAOSTOCK_ENABLED:-true}"
       FINNHUB_API_KEY: "${FINNHUB_API_KEY}"
       FINNHUB_ENABLED: "${FINNHUB_ENABLED:-false}"
-    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       mongodb:
         condition: service_healthy
@@ -154,7 +154,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
-    image: hsliup/tradingagents-frontend:v1.0.1
+    image: hsliup/tradingagents-frontend:latest
     container_name: tradingagents-frontend
     restart: unless-stopped
     expose:
@@ -173,9 +173,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    volumes:
-    - ./frontend/src:/app/frontend/src:ro
-    - ./frontend/public:/app/frontend/public:ro
 
   # Nginx 反向代理
   # ports可以改为8080:80,或者其它的端口映射，前面一个是外部的端口，后面一个是容器内的端口
@@ -187,8 +184,8 @@ services:
       - "80:80" 
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
     depends_on:
-      - frontend
       - backend
     networks:
       - tradingagents-network

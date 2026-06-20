@@ -290,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Files, TrendCharts, Check, Close } from '@element-plus/icons-vue'
 import { ANALYSTS, DEFAULT_ANALYSTS, convertAnalystNamesToIds } from '@/constants/analysts'
@@ -300,6 +300,7 @@ import { useAuthStore } from '@/stores/auth'
 import ModelConfig from '@/components/ModelConfig.vue'
 import { getMarketByStockCode } from '@/utils/market'
 import { validateStockCode } from '@/utils/stockValidator'
+import { getPreference, setPreference, PREFERENCE_KEYS } from '@/utils/preferences'
 
 // 路由实例（必须在顶层调用）
 const router = useRouter()
@@ -384,14 +385,43 @@ const initializeModelSettings = async () => {
 
     // 获取默认模型
     const defaultModels = await configApi.getDefaultModels()
-    modelSettings.value.quickAnalysisModel = defaultModels.quick_analysis_model
-    modelSettings.value.deepAnalysisModel = defaultModels.deep_analysis_model
+    const serverQuickModel = defaultModels.quick_analysis_model
+    const serverDeepModel = defaultModels.deep_analysis_model
 
     // 获取所有可用的模型列表
     const llmConfigs = await configApi.getLLMConfigs()
     availableModels.value = sortModelsByNewest(
       llmConfigs.filter((config: any) => config.enabled)
     )
+
+    // 🔥 优先从 localStorage 读取上次保存的模型配置（用户偏好）
+    const savedQuickModel = getPreference<string>(PREFERENCE_KEYS.QUICK_ANALYSIS_MODEL, '')
+    const savedDeepModel = getPreference<string>(PREFERENCE_KEYS.DEEP_ANALYSIS_MODEL, '')
+
+    // 验证保存的模型是否在可用列表中
+    const isModelAvailable = (modelName: string) => {
+      return availableModels.value.some(m => m.model_name === modelName)
+    }
+
+    if (savedQuickModel && isModelAvailable(savedQuickModel)) {
+      modelSettings.value.quickAnalysisModel = savedQuickModel
+      console.log('💾 [用户偏好] 使用保存的快速分析模型:', savedQuickModel)
+    } else {
+      modelSettings.value.quickAnalysisModel = serverQuickModel
+      if (savedQuickModel) {
+        console.log('⚠️ [用户偏好] 保存的快速分析模型不可用，使用服务器默认:', serverQuickModel)
+      }
+    }
+
+    if (savedDeepModel && isModelAvailable(savedDeepModel)) {
+      modelSettings.value.deepAnalysisModel = savedDeepModel
+      console.log('💾 [用户偏好] 使用保存的深度决策模型:', savedDeepModel)
+    } else {
+      modelSettings.value.deepAnalysisModel = serverDeepModel
+      if (savedDeepModel) {
+        console.log('⚠️ [用户偏好] 保存的深度决策模型不可用，使用服务器默认:', serverDeepModel)
+      }
+    }
 
     console.log('✅ 加载模型配置成功:', {
       quick: modelSettings.value.quickAnalysisModel,
@@ -405,6 +435,18 @@ const initializeModelSettings = async () => {
     modelSettings.value.deepAnalysisModel = 'qwen-max'
   }
 }
+
+// 🔥 监听模型选择变化，实时保存到 localStorage（实现"记住上次配置"）
+watch([() => modelSettings.value.quickAnalysisModel, () => modelSettings.value.deepAnalysisModel], ([newQuick, newDeep], [oldQuick, oldDeep]) => {
+  if (newQuick !== oldQuick) {
+    setPreference(PREFERENCE_KEYS.QUICK_ANALYSIS_MODEL, newQuick)
+    console.log('💾 [用户偏好] 已保存快速分析模型:', newQuick)
+  }
+  if (newDeep !== oldDeep) {
+    setPreference(PREFERENCE_KEYS.DEEP_ANALYSIS_MODEL, newDeep)
+    console.log('💾 [用户偏好] 已保存深度决策模型:', newDeep)
+  }
+})
 
 // 页面初始化
 onMounted(async () => {
@@ -523,7 +565,12 @@ const submitBatchAnalysis = async () => {
         include_risk: batchForm.includeRisk,
         language: batchForm.language,
         quick_analysis_model: modelSettings.value.quickAnalysisModel,
-        deep_analysis_model: modelSettings.value.deepAnalysisModel
+        deep_analysis_model: modelSettings.value.deepAnalysisModel,
+        // 传递provider信息，避免后端回退到错误的默认映射
+        quick_provider: availableModels.value.find(m => m.model_name === modelSettings.value.quickAnalysisModel)?.provider || '',
+        deep_provider: availableModels.value.find(m => m.model_name === modelSettings.value.deepAnalysisModel)?.provider || '',
+        quick_backend_url: availableModels.value.find(m => m.model_name === modelSettings.value.quickAnalysisModel)?.api_base || '',
+        deep_backend_url: availableModels.value.find(m => m.model_name === modelSettings.value.deepAnalysisModel)?.api_base || ''
       }
     }
 

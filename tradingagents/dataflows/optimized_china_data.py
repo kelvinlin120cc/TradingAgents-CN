@@ -477,6 +477,33 @@ class OptimizedChinaDataProvider:
 
         # 根据分析模块级别调整报告内容
         logger.debug(f"🔍 [基本面分析] 使用分析模块级别: {analysis_modules}")
+
+        # 提取常用变量，简化模板
+        valuation_time = financial_estimates.get('valuation_data_time', 'N/A')
+        pe_ttm = financial_estimates.get('pe_ttm', 'N/A')
+        pe_ttm_time = financial_estimates.get('pe_ttm_time', valuation_time)
+        pb = financial_estimates.get('pb', 'N/A')
+        pb_time = financial_estimates.get('pb_time', valuation_time)
+        total_mv = financial_estimates.get('total_mv', 'N/A')
+        peg = financial_estimates.get('peg', 'N/A')
+        ps = financial_estimates.get('ps', 'N/A')
+        dividend_yield = financial_estimates.get('dividend_yield', 'N/A')
+        roe = financial_estimates.get('roe', 'N/A')
+        roe_time = financial_estimates.get('roe_time', 'N/A')
+        roa = financial_estimates.get('roa', 'N/A')
+        roa_time = financial_estimates.get('roa_time', 'N/A')
+        gross_margin = financial_estimates.get('gross_margin', 'N/A')
+        gross_margin_time = financial_estimates.get('gross_margin_time', 'N/A')
+        net_margin = financial_estimates.get('net_margin', 'N/A')
+        net_margin_time = financial_estimates.get('net_margin_time', 'N/A')
+        debt_ratio = financial_estimates.get('debt_ratio', 'N/A')
+        debt_ratio_time = financial_estimates.get('debt_ratio_time', 'N/A')
+        current_ratio = financial_estimates.get('current_ratio', 'N/A')
+        quick_ratio = financial_estimates.get('quick_ratio', 'N/A')
+        cash_ratio = financial_estimates.get('cash_ratio', 'N/A')
+        report_period = financial_estimates.get('report_period', 'N/A')
+        data_update_time = financial_estimates.get('data_update_time', 'N/A')
+        data_src = financial_estimates.get('data_source', 'N/A')
         
         if analysis_modules == "basic":
             # 基础模式：只包含核心财务指标
@@ -490,21 +517,23 @@ class OptimizedChinaDataProvider:
 - **分析日期**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y年%m月%d日')}{data_source_note}
 
 ## 💰 核心财务指标
-- **总市值**: {financial_estimates.get('total_mv', 'N/A')}
-- **市盈率(PE)**: {financial_estimates.get('pe', 'N/A')}
-- **市盈率TTM(PE_TTM)**: {financial_estimates.get('pe_ttm', 'N/A')}
-- **市净率(PB)**: {financial_estimates.get('pb', 'N/A')}
-- **净资产收益率(ROE)**: {financial_estimates.get('roe', 'N/A')}
-- **资产负债率**: {financial_estimates.get('debt_ratio', 'N/A')}
+- **总市值**: {total_mv}
+- **市盈率TTM(PE_TTM)**: {pe_ttm}
+- **市净率(PB)**: {pb}
+- **PEG**: {peg}
+- **净资产收益率(ROE)**: {roe}
+- **资产负债率**: {debt_ratio}
 
 ## 💡 基础评估
 - **基本面评分**: {financial_estimates['fundamental_score']}/10
 - **风险等级**: {financial_estimates['risk_level']}
 
 ---
-**重要声明**: 本报告基于公开数据和模型估算生成，仅供参考，不构成投资建议。
-**数据来源**: {data_source if data_source else "多源数据"}数据接口
-**生成时间**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y-%m-%d %H:%M:%S')}
+⚠️ **重要声明**: 本报告基于公开数据和模型估算生成，仅供参考，不构成投资建议。
+
+📊 **数据来源**: 📦 {data_src}
+⏰ **更新时间**: {data_update_time}
+🕐 **生成时间**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y-%m-%d %H:%M:%S')}
 """
         elif analysis_modules in ["standard", "full"]:
             # 标准/完整模式：包含详细分析
@@ -522,25 +551,42 @@ class OptimizedChinaDataProvider:
 
 ## 💰 财务数据分析
 
-### 估值指标
-- **总市值**: {financial_estimates.get('total_mv', 'N/A')}
-- **市盈率(PE)**: {financial_estimates.get('pe', 'N/A')}
-- **市盈率TTM(PE_TTM)**: {financial_estimates.get('pe_ttm', 'N/A')}
-- **市净率(PB)**: {financial_estimates.get('pb', 'N/A')}
-- **市销率(PS)**: {financial_estimates.get('ps', 'N/A')}
-- **股息收益率**: {financial_estimates.get('dividend_yield', 'N/A')}
+### 📋 数据概览
+| 数据类别 | 数据时间 | 数据来源 | 更新时间 |
+|:--------|:--------|:--------|:--------|
+| 💹 估值指标 | {valuation_time} | {data_src} | {data_update_time} |
+| 📈 盈利能力 | {report_period} | {data_src} | {data_update_time} |
+| 🏦 财务健康 | {report_period} | {data_src} | {data_update_time} |
 
-### 盈利能力指标
-- **净资产收益率(ROE)**: {financial_estimates['roe']}
-- **总资产收益率(ROA)**: {financial_estimates['roa']}
-- **毛利率**: {financial_estimates['gross_margin']}
-- **净利率**: {financial_estimates['net_margin']}
+### 💹 估值指标
+| 指标 | 数值 | 数据时间 | 估值说明 |
+|:-----|----:|:--------|:---------|
+| 总市值 | **{total_mv}** | {valuation_time} | 市场规模 |
+| **PE_TTM** | **{pe_ttm}** | {pe_ttm_time} | ⚠️ 滚动市盈率 |
+| PB | **{pb}** | {pb_time} | 📊 市净率 |
+| PEG | {peg} | {valuation_time} | 🎯 成长估值 |
+| PS | {ps} | {valuation_time} | 📈 市销率 |
+| 股息收益率 | {dividend_yield} | - | 💵 年度回报 |
 
-### 财务健康度
-- **资产负债率**: {financial_estimates['debt_ratio']}
-- **流动比率**: {financial_estimates['current_ratio']}
-- **速动比率**: {financial_estimates['quick_ratio']}
-- **现金比率**: {financial_estimates['cash_ratio']}
+---
+
+### 📈 盈利能力指标
+| 指标 | 数值 | 报告期 | 质量说明 |
+|:-----|----:|:------|:---------|
+| ROE | **{roe}** | {roe_time} | 净资产收益率 |
+| ROA | {roa} | {roa_time} | 总资产收益率 |
+| 毛利率 | **{gross_margin}** | {gross_margin_time} | 销售毛利率 |
+| 净利率 | **{net_margin}** | {net_margin_time} | 销售净利率 |
+
+---
+
+### 🏦 财务健康度
+| 指标 | 数值 | 报告期 | 健康说明 |
+|:-----|----:|:------|:---------|
+| 资产负债率 | {debt_ratio} | {debt_ratio_time} | 负债水平 |
+| 流动比率 | {current_ratio} | {report_period} | 短期偿债能力 |
+| 速动比率 | {quick_ratio} | {report_period} | 速动偿债能力 |
+| 现金比率 | {cash_ratio} | {report_period} | 现金偿债能力 |
 
 ## 📈 行业分析
 {industry_info['analysis']}
@@ -561,9 +607,11 @@ class OptimizedChinaDataProvider:
 {self._generate_investment_advice(financial_estimates, industry_info)}
 
 ---
-**重要声明**: 本报告基于公开数据和模型估算生成，仅供参考，不构成投资建议。
-**数据来源**: {data_source if data_source else "多源数据"}数据接口
-**生成时间**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y-%m-%d %H:%M:%S')}
+⚠️ **重要声明**: 本报告基于公开数据和模型估算生成，仅供参考，不构成投资建议。
+
+📊 **数据来源**: 📦 {data_src}
+⏰ **更新时间**: {data_update_time}
+🕐 **生成时间**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y-%m-%d %H:%M:%S')}
 """
         else:  # detailed, comprehensive
             # 详细/全面模式：包含最完整的分析
@@ -581,25 +629,42 @@ class OptimizedChinaDataProvider:
 
 ## 💰 财务数据分析
 
-### 估值指标
-- **总市值**: {financial_estimates.get('total_mv', 'N/A')}
-- **市盈率(PE)**: {financial_estimates.get('pe', 'N/A')}
-- **市盈率TTM(PE_TTM)**: {financial_estimates.get('pe_ttm', 'N/A')}
-- **市净率(PB)**: {financial_estimates.get('pb', 'N/A')}
-- **市销率(PS)**: {financial_estimates.get('ps', 'N/A')}
-- **股息收益率**: {financial_estimates.get('dividend_yield', 'N/A')}
+### 📋 数据概览
+| 数据类别 | 数据时间 | 数据来源 | 更新时间 |
+|:--------|:--------|:--------|:--------|
+| 💹 估值指标 | {valuation_time} | {data_src} | {data_update_time} |
+| 📈 盈利能力 | {report_period} | {data_src} | {data_update_time} |
+| 🏦 财务健康 | {report_period} | {data_src} | {data_update_time} |
 
-### 盈利能力指标
-- **净资产收益率(ROE)**: {financial_estimates.get('roe', 'N/A')}
-- **总资产收益率(ROA)**: {financial_estimates.get('roa', 'N/A')}
-- **毛利率**: {financial_estimates.get('gross_margin', 'N/A')}
-- **净利率**: {financial_estimates.get('net_margin', 'N/A')}
+### 💹 估值指标
+| 指标 | 数值 | 数据时间 | 估值说明 |
+|:-----|----:|:--------|:---------|
+| 总市值 | **{total_mv}** | {valuation_time} | 市场规模 |
+| **PE_TTM** | **{pe_ttm}** | {pe_ttm_time} | ⚠️ 滚动市盈率 |
+| PB | **{pb}** | {pb_time} | 📊 市净率 |
+| PEG | {peg} | {valuation_time} | 🎯 成长估值 |
+| PS | {ps} | {valuation_time} | 📈 市销率 |
+| 股息收益率 | {dividend_yield} | - | 💵 年度回报 |
 
-### 财务健康度
-- **资产负债率**: {financial_estimates['debt_ratio']}
-- **流动比率**: {financial_estimates['current_ratio']}
-- **速动比率**: {financial_estimates['quick_ratio']}
-- **现金比率**: {financial_estimates['cash_ratio']}
+---
+
+### 📈 盈利能力指标
+| 指标 | 数值 | 报告期 | 质量说明 |
+|:-----|----:|:------|:---------|
+| ROE | **{roe}** | {roe_time} | 净资产收益率 |
+| ROA | {roa} | {roa_time} | 总资产收益率 |
+| 毛利率 | **{gross_margin}** | {gross_margin_time} | 销售毛利率 |
+| 净利率 | **{net_margin}** | {net_margin_time} | 销售净利率 |
+
+---
+
+### 🏦 财务健康度
+| 指标 | 数值 | 报告期 | 健康说明 |
+|:-----|----:|:------|:---------|
+| 资产负债率 | {debt_ratio} | {debt_ratio_time} | 负债水平 |
+| 流动比率 | {current_ratio} | {report_period} | 短期偿债能力 |
+| 速动比率 | {quick_ratio} | {report_period} | 速动偿债能力 |
+| 现金比率 | {cash_ratio} | {report_period} | 现金偿债能力 |
 
 ## 📈 行业分析
 
@@ -672,8 +737,9 @@ class OptimizedChinaDataProvider:
 **重要声明**: 本报告基于公开数据和模型估算生成，仅供参考，不构成投资建议。
 实际投资决策请结合最新财报数据和专业分析师意见。
 
-**数据来源**: {data_source if data_source else "多源数据"}数据接口 + 基本面分析模型
-**生成时间**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y-%m-%d %H:%M:%S')}
+📊 **数据来源**: 📦 {data_src} + 基本面分析模型
+⏰ **更新时间**: {data_update_time}
+🕐 **生成时间**: {datetime.now(ZoneInfo(get_timezone_name())).strftime('%Y-%m-%d %H:%M:%S')}
 """
 
         return report
@@ -821,6 +887,31 @@ class OptimizedChinaDataProvider:
             }
         }
 
+    def _run_async_data_call(self, coro):
+        """在同步分析链路中安全执行异步数据源调用"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            from concurrent.futures import ThreadPoolExecutor
+
+            def run_in_new_loop():
+                new_loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(new_loop)
+                    return new_loop.run_until_complete(coro)
+                finally:
+                    new_loop.close()
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                return executor.submit(run_in_new_loop).result()
+
+        return loop.run_until_complete(coro)
+
     def _estimate_financial_metrics(self, symbol: str, current_price: str) -> dict:
         """获取真实财务指标（从 MongoDB、AKShare、Tushare 获取，失败则抛出异常）"""
 
@@ -837,7 +928,7 @@ class OptimizedChinaDataProvider:
             return real_metrics
 
         # 如果无法获取真实数据，抛出异常
-        error_msg = f"无法获取股票 {symbol} 的财务数据。已尝试所有数据源（MongoDB、AKShare、Tushare）均失败。"
+        error_msg = f"无法获取股票 {symbol} 的财务数据。已尝试所有数据源（MongoDB、AKShare、Tushare、问财）均失败。"
         logger.error(f"❌ {error_msg}")
         raise ValueError(error_msg)
 
@@ -892,23 +983,52 @@ class OptimizedChinaDataProvider:
                 else:
                     logger.info(f"🔄 MongoDB 未找到{symbol}财务数据，尝试从 AKShare API 获取")
             else:
-                logger.info(f"🔄 数据库缓存未启用，直接从AKShare API获取{symbol}财务数据")
+                logger.info(f"🔄 数据库缓存未启用，直接从Tushare API获取{symbol}财务数据")
 
-            # 第二优先级：从AKShare API获取
-            from .providers.china.akshare import get_akshare_provider
+            # 🔥 第二优先级：从Tushare API获取（优先使用Tushare，数据更准确）
+            # Tushare提供标准化的财务数据，包含PE_TTM等关键指标
+            from .providers.china.tushare import get_tushare_provider
             import asyncio
+
+            tushare_provider = get_tushare_provider()
+
+            if tushare_provider.connected:
+                logger.info(f"🔄 使用Tushare数据源获取{symbol}财务数据")
+                # 获取财务数据（异步方法）
+                financial_data = self._run_async_data_call(tushare_provider.get_financial_data(symbol))
+
+                if financial_data:
+                    logger.info(f"✅ Tushare财务数据获取成功: {symbol}")
+                    # 获取股票基本信息（也是异步方法）
+                    stock_info = self._run_async_data_call(tushare_provider.get_stock_basic_info(symbol))
+
+                    # 解析Tushare财务数据
+                    metrics = self._parse_financial_data(financial_data, stock_info, price_value)
+                    if metrics:
+                        logger.info(f"✅ Tushare解析成功，返回指标")
+                        # 缓存原始财务数据到数据库
+                        self._cache_raw_financial_data(symbol, financial_data, stock_info)
+                        return metrics
+                    else:
+                        logger.warning(f"⚠️ Tushare解析失败，尝试AKShare")
+                else:
+                    logger.warning(f"⚠️ Tushare未获取到{symbol}财务数据，尝试AKShare")
+            else:
+                logger.warning(f"⚠️ Tushare未连接，尝试AKShare")
+
+            # 🔥 第三优先级：从AKShare API获取（作为备用数据源）
+            from .providers.china.akshare import get_akshare_provider
 
             akshare_provider = get_akshare_provider()
 
             if akshare_provider.connected:
-                # AKShare的get_financial_data是异步方法，需要使用asyncio运行
-                loop = asyncio.get_event_loop()
-                financial_data = loop.run_until_complete(akshare_provider.get_financial_data(symbol))
+                # AKShare的get_financial_data是异步方法，需要在同步链路中安全执行
+                financial_data = self._run_async_data_call(akshare_provider.get_financial_data(symbol))
 
                 if financial_data and any(not v.empty if hasattr(v, 'empty') else bool(v) for v in financial_data.values()):
                     logger.info(f"✅ AKShare财务数据获取成功: {symbol}")
                     # 获取股票基本信息（也是异步方法）
-                    stock_info = loop.run_until_complete(akshare_provider.get_stock_basic_info(symbol))
+                    stock_info = self._run_async_data_call(akshare_provider.get_stock_basic_info(symbol))
 
                     # 解析AKShare财务数据
                     logger.debug(f"🔧 调用AKShare解析函数，股价: {price_value}")
@@ -922,39 +1042,40 @@ class OptimizedChinaDataProvider:
                     else:
                         logger.warning(f"⚠️ AKShare解析失败，返回None")
                 else:
-                    logger.warning(f"⚠️ AKShare未获取到{symbol}财务数据，尝试Tushare")
+                    logger.warning(f"⚠️ AKShare未获取到{symbol}财务数据")
             else:
-                logger.warning(f"⚠️ AKShare未连接，尝试Tushare")
+                logger.warning(f"⚠️ AKShare未连接，跳过")
 
-            # 第三优先级：使用Tushare数据源
-            logger.info(f"🔄 使用Tushare备用数据源获取{symbol}财务数据")
-            from .providers.china.tushare import get_tushare_provider
-            import asyncio
-
-            provider = get_tushare_provider()
-            if not provider.connected:
-                logger.debug(f"Tushare未连接，无法获取{symbol}真实财务数据")
-                return None
-
-            # 获取财务数据（异步方法）
-            loop = asyncio.get_event_loop()
-            financial_data = loop.run_until_complete(provider.get_financial_data(symbol))
-            if not financial_data:
-                logger.debug(f"未获取到{symbol}的财务数据")
-                return None
-
-            # 获取股票基本信息（异步方法）
-            stock_info = loop.run_until_complete(provider.get_stock_basic_info(symbol))
-
-            # 解析Tushare财务数据
-            metrics = self._parse_financial_data(financial_data, stock_info, price_value)
-            if metrics:
-                # 缓存原始财务数据到数据库
-                self._cache_raw_financial_data(symbol, financial_data, stock_info)
-                return metrics
+            # 第四优先级：使用问财数据源（补充 PE、PB、PEG 等估值数据）
+            logger.info(f"🔄 使用问财数据源获取{symbol}估值数据")
+            from .providers.china.wencai_provider import get_wencai_provider
+            
+            wencai_provider = get_wencai_provider()
+            if wencai_provider.connected:
+                valuation_data = self._run_async_data_call(wencai_provider.get_stock_valuation(symbol))
+                
+                if valuation_data:
+                    logger.info(f"✅ 问财估值数据获取成功: {symbol}")
+                    # 构建返回格式，兼容现有解析逻辑
+                    # 🔥 修复：优先使用 PE_TTM 而不是静态 PE
+                    pe_value = valuation_data.get('pe_ttm') if valuation_data.get('pe_ttm') else valuation_data.get('pe')
+                    metrics = {
+                        'pe': str(pe_value) if pe_value else 'N/A',
+                        'pb': str(valuation_data.get('pb', 'N/A')),
+                        'peg': str(valuation_data.get('peg', 'N/A')),
+                        'eps': str(valuation_data.get('eps', 'N/A')),
+                        'bps': str(valuation_data.get('bps', 'N/A')),
+                    }
+                    # 清理 N/A 值
+                    metrics = {k: v for k, v in metrics.items() if v and v != 'N/A'}
+                    return metrics
+                else:
+                    logger.warning(f"⚠️ 问财未获取到{symbol}估值数据")
+            else:
+                logger.warning(f"⚠️ 问财未连接，API Key 未配置")
 
         except Exception as e:
-            logger.debug(f"获取{symbol}真实财务数据失败: {e}")
+            logger.warning(f"获取{symbol}真实财务数据失败: {e}", exc_info=True)
 
         return None
 
@@ -1172,16 +1293,17 @@ class OptimizedChinaDataProvider:
                             else:
                                 logger.warning(f"⚠️ [PE计算-第2层失败] 市值无效: {money_cap}，尝试第3层")
 
-                                # 第三层降级：直接使用 latest_indicators 中的 pe 字段（仅当为正数时）
-                                pe_static = latest_indicators.get('pe')
+                                # 第三层降级：优先使用 PE_TTM，其次使用静态 PE（仅当为正数时）
+                                pe_static = latest_indicators.get('pe_ttm') if latest_indicators.get('pe_ttm') else latest_indicators.get('pe')
                                 if pe_static is not None and str(pe_static) != 'nan' and pe_static != '--':
                                     try:
                                         pe_float = float(pe_static)
                                         # 🔥 只接受正数的 PE
                                         if pe_float > 0:
                                             metrics["pe"] = f"{pe_float:.1f}倍"
-                                            logger.info(f"✅ [PE计算-第3层成功] 使用静态PE: {metrics['pe']}")
-                                            logger.info(f"   └─ 数据来源: stock_basic_info.pe")
+                                            pe_source = "PE_TTM" if latest_indicators.get('pe_ttm') else "PE(静态)"
+                                            logger.info(f"✅ [PE计算-第3层成功] 使用{pe_source}: {metrics['pe']}")
+                                            logger.info(f"   └─ 数据来源: stock_basic_info.{pe_source.lower()}")
                                         else:
                                             metrics["pe"] = "N/A"
                                             logger.info(f"⚠️ [PE计算-第3层跳过] 静态PE为负数或零（亏损股）: {pe_float}")
@@ -1201,16 +1323,17 @@ class OptimizedChinaDataProvider:
                     else:
                         logger.warning(f"⚠️ [PE计算-第2层跳过] 净利润无效: {net_profit}，尝试第3层")
 
-                        # 第三层降级：直接使用 latest_indicators 中的 pe 字段（仅当为正数时）
-                        pe_static = latest_indicators.get('pe')
+                        # 第三层降级：优先使用 PE_TTM，其次使用静态 PE（仅当为正数时）
+                        pe_static = latest_indicators.get('pe_ttm') if latest_indicators.get('pe_ttm') else latest_indicators.get('pe')
                         if pe_static is not None and str(pe_static) != 'nan' and pe_static != '--':
                             try:
                                 pe_float = float(pe_static)
                                 # 🔥 只接受正数的 PE
                                 if pe_float > 0:
                                     metrics["pe"] = f"{pe_float:.1f}倍"
-                                    logger.info(f"✅ [PE计算-第3层成功] 使用静态PE: {metrics['pe']}")
-                                    logger.info(f"   └─ 数据来源: stock_basic_info.pe")
+                                    pe_source = "PE_TTM" if latest_indicators.get('pe_ttm') else "PE(静态)"
+                                    logger.info(f"✅ [PE计算-第3层成功] 使用{pe_source}: {metrics['pe']}")
+                                    logger.info(f"   └─ 数据来源: stock_basic_info.{pe_source.lower()}")
                                 else:
                                     metrics["pe"] = "N/A"
                                     logger.info(f"⚠️ [PE计算-第3层跳过] 静态PE为负数或零（亏损股）: {pe_float}")
@@ -1335,7 +1458,49 @@ class OptimizedChinaDataProvider:
             metrics["growth_score"] = 7.0
             metrics["risk_level"] = "中等"
 
+            # 🔥 新增：添加数据时间和来源字段
+            # 从 MongoDB 文档中提取时间信息
+            data_update_time = latest_indicators.get('updated_at')
+            trade_date = latest_indicators.get('trade_date')
+            report_period = latest_indicators.get('report_period') or latest_indicators.get('ann_date')
+            data_source = latest_indicators.get('data_source', 'MongoDB')
+
+            # 格式化时间字段
+            if data_update_time:
+                if hasattr(data_update_time, 'strftime'):
+                    metrics["data_update_time"] = data_update_time.strftime('%Y-%m-%d %H:%M')
+                else:
+                    metrics["data_update_time"] = str(data_update_time)[:19] if len(str(data_update_time)) >= 19 else str(data_update_time)
+            else:
+                metrics["data_update_time"] = "N/A"
+
+            if trade_date:
+                if hasattr(trade_date, 'strftime'):
+                    metrics["valuation_data_time"] = trade_date.strftime('%Y-%m-%d')
+                else:
+                    metrics["valuation_data_time"] = str(trade_date)[:10] if len(str(trade_date)) >= 10 else str(trade_date)
+            else:
+                metrics["valuation_data_time"] = "N/A"
+
+            if report_period:
+                metrics["report_period"] = str(report_period)
+            else:
+                metrics["report_period"] = "N/A"
+
+            metrics["data_source"] = data_source
+
+            # 为每个关键指标添加独立的时间字段
+            metrics["pe_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["pe_ttm_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["pb_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["roe_time"] = metrics.get("report_period", "N/A")
+            metrics["roa_time"] = metrics.get("report_period", "N/A")
+            metrics["gross_margin_time"] = metrics.get("report_period", "N/A")
+            metrics["net_margin_time"] = metrics.get("report_period", "N/A")
+            metrics["debt_ratio_time"] = metrics.get("report_period", "N/A")
+
             logger.info(f"✅ MongoDB 财务数据解析成功: ROE={metrics.get('roe')}, ROA={metrics.get('roa')}, 毛利率={metrics.get('gross_margin')}, 净利率={metrics.get('net_margin')}")
+            logger.info(f"   └─ 数据时间: 估值={metrics.get('valuation_data_time')}, 财报={metrics.get('report_period')}, 更新={metrics.get('data_update_time')}")
             return metrics
 
         except Exception as e:
@@ -1390,16 +1555,138 @@ class OptimizedChinaDataProvider:
             # 计算财务指标
             metrics = {}
 
-            # 🔥 优先尝试使用实时 PE/PB 计算（与 MongoDB 解析保持一致）
+            # 🔥 优先从 Tushare 直接获取 PE_TTM（最权威的数据源）
             pe_value = None
             pe_ttm_value = None
             pb_value = None
 
-            try:
-                # 获取股票代码
-                stock_code = stock_info.get('code', '').replace('.SH', '').replace('.SZ', '').zfill(6)
-                if stock_code:
-                    logger.info(f"📊 [AKShare-PE计算-第1层] 尝试使用实时PE/PB计算: {stock_code}")
+            # 获取股票代码
+            stock_code = stock_info.get('code', '').replace('.SH', '').replace('.SZ', '').zfill(6)
+
+            # ===== 第1层：从 MongoDB 缓存获取 Tushare 数据 =====
+            # MongoDB 数据结构：
+            #   stock_financial_data: Tushare financial_sync 同步，含 pe_ttm/pb/peg/total_mv 等估值指标
+            #   stock_basic_info: Tushare basic_info_sync 同步，含代码/名称/行业等基础信息（不含pe_ttm）
+            #   market_quotes: 实时行情数据
+            # 优先从 stock_financial_data 获取估值指标
+            if stock_code:
+                try:
+                    from tradingagents.config.database_manager import get_database_manager
+                    db_manager = get_database_manager()
+                    if db_manager.is_mongodb_available():
+                        client = db_manager.get_mongodb_client()
+                        db = client.tradingagentscn
+
+                        # 1a: 从 stock_financial_data 获取估值指标（Tushare financial_sync 写入）
+                        fin_data = db.stock_financial_data.find_one(
+                            {"code": stock_code, "data_source": "tushare"},
+                            sort=[("updated_at", -1)]
+                        )
+                        if not fin_data:
+                            fin_data = db.stock_financial_data.find_one(
+                                {"symbol": stock_code, "data_source": "tushare"},
+                                sort=[("updated_at", -1)]
+                            )
+
+                        if fin_data:
+                            pe_ttm_cached = fin_data.get("pe_ttm")
+                            pb_cached = fin_data.get("pb")
+                            peg_cached = fin_data.get("peg")
+                            total_mv_cached = fin_data.get("total_mv")  # Tushare 单位：万元
+
+                            if pe_ttm_cached and float(pe_ttm_cached) > 0:
+                                metrics["pe"] = f"{float(pe_ttm_cached):.1f}倍"
+                                pe_value = float(pe_ttm_cached)
+                                metrics["pe_ttm"] = f"{float(pe_ttm_cached):.1f}倍"
+                                pe_ttm_value = float(pe_ttm_cached)
+                                logger.info(f"✅ [PE计算-第1层成功] 使用Tushare PE_TTM(MongoDB缓存): {pe_ttm_cached}倍")
+
+                            if pb_cached and float(pb_cached) > 0:
+                                metrics["pb"] = f"{float(pb_cached):.2f}倍"
+                                pb_value = float(pb_cached)
+                                logger.info(f"✅ [PB计算-第1层成功] 使用Tushare PB(MongoDB缓存): {pb_cached}倍")
+
+                            if peg_cached and float(peg_cached) > 0:
+                                metrics["peg"] = f"{float(peg_cached):.2f}"
+                                logger.info(f"✅ [PEG计算-第1层成功] 使用Tushare PEG(MongoDB缓存): {peg_cached}")
+
+                            if total_mv_cached and float(total_mv_cached) > 0:
+                                # Tushare total_mv 单位是万元，转为亿元
+                                metrics["total_mv"] = f"{float(total_mv_cached)/10000:.2f}亿元"
+                                logger.info(f"✅ [总市值-第1层成功] 使用Tushare总市值(MongoDB缓存): {float(total_mv_cached)/10000:.2f}亿元")
+
+                        # 1b: 如果 stock_financial_data 没有，再从 stock_basic_info 查找（可能由其他同步写入）
+                        if pe_value is None:
+                            basic_info = db.stock_basic_info.find_one({"code": stock_code, "source": "tushare"})
+                            if not basic_info:
+                                basic_info = db.stock_basic_info.find_one({"code": stock_code})
+                            if basic_info:
+                                pe_ttm_bi = basic_info.get("pe_ttm")
+                                pb_bi = basic_info.get("pb")
+                                total_mv_bi = basic_info.get("total_mv")
+
+                                if pe_ttm_bi and float(pe_ttm_bi) > 0:
+                                    metrics["pe"] = f"{float(pe_ttm_bi):.1f}倍"
+                                    pe_value = float(pe_ttm_bi)
+                                    metrics["pe_ttm"] = f"{float(pe_ttm_bi):.1f}倍"
+                                    pe_ttm_value = float(pe_ttm_bi)
+                                    logger.info(f"✅ [PE计算-第1层成功] 使用Tushare PE_TTM(stock_basic_info缓存): {pe_ttm_bi}倍")
+
+                                if pb_value is None and pb_bi and float(pb_bi) > 0:
+                                    metrics["pb"] = f"{float(pb_bi):.2f}倍"
+                                    pb_value = float(pb_bi)
+                                    logger.info(f"✅ [PB计算-第1层成功] 使用Tushare PB(stock_basic_info缓存): {pb_bi}倍")
+
+                                if "total_mv" not in metrics and total_mv_bi and float(total_mv_bi) > 0:
+                                    metrics["total_mv"] = f"{float(total_mv_bi):.2f}亿元"
+                                    logger.info(f"✅ [总市值-第1层成功] 使用Tushare总市值(stock_basic_info缓存): {total_mv_bi}亿元")
+                except Exception as e:
+                    logger.warning(f"⚠️ [PE计算-第1层] 从MongoDB获取Tushare数据失败: {e}")
+
+                # 1b: 如果缓存没有，直接调用 Tushare API
+                if pe_value is None:
+                    try:
+                        from tradingagents.dataflows.providers.china.tushare import get_tushare_provider
+                        tushare = get_tushare_provider()
+                        if tushare and tushare.is_available():
+                            ts_code = f"{stock_code}.SZ" if stock_code.startswith(('0', '3')) else f"{stock_code}.SH"
+                            df = self._run_async_data_call(tushare.get_daily_basic(trade_date=end_date))
+                            if df is not None and not df.empty:
+                                row = df[df['ts_code'] == ts_code]
+                                if row.empty:
+                                    row = df.iloc[0:1]
+                                if not row.empty:
+                                    pe_ttm_api = row.iloc[0].get('pe_ttm')
+                                    pb_api = row.iloc[0].get('pb')
+                                    total_mv_api = row.iloc[0].get('total_mv')
+
+                                    if pe_ttm_api and float(pe_ttm_api) > 0:
+                                        metrics["pe"] = f"{float(pe_ttm_api):.1f}倍"
+                                        pe_value = float(pe_ttm_api)
+                                        metrics["pe_ttm"] = f"{float(pe_ttm_api):.1f}倍"
+                                        pe_ttm_value = float(pe_ttm_api)
+                                        logger.info(f"✅ [PE计算-第1层成功] 使用Tushare PE_TTM(API): {pe_ttm_api}倍")
+
+                                    if pb_api and float(pb_api) > 0:
+                                        metrics["pb"] = f"{float(pb_api):.2f}倍"
+                                        pb_value = float(pb_api)
+                                        logger.info(f"✅ [PB计算-第1层成功] 使用Tushare PB(API): {pb_api}倍")
+
+                                    if total_mv_api and float(total_mv_api) > 0:
+                                        # Tushare total_mv 单位是万元，转为亿元
+                                        metrics["total_mv"] = f"{float(total_mv_api)/10000:.2f}亿元"
+                                        logger.info(f"✅ [总市值-第1层成功] 使用Tushare总市值(API): {float(total_mv_api)/10000:.2f}亿元")
+                            else:
+                                logger.warning(f"⚠️ [PE计算-第1层] Tushare API未返回daily_basic数据")
+                        else:
+                            logger.warning(f"⚠️ [PE计算-第1层] Tushare不可用")
+                    except Exception as e:
+                        logger.warning(f"⚠️ [PE计算-第1层] 从Tushare API获取PE_TTM失败: {e}")
+
+            # ===== 第2层：realtime_metrics 动态计算（仅在第1层失败时使用） =====
+            if pe_value is None and stock_code:
+                try:
+                    logger.info(f"📊 [PE计算-第2层] Tushare数据不可用，尝试实时动态计算: {stock_code}")
 
                     from tradingagents.config.database_manager import get_database_manager
                     from tradingagents.dataflows.realtime_metrics import get_pe_pb_with_fallback
@@ -1413,40 +1700,36 @@ class OptimizedChinaDataProvider:
 
                         if realtime_metrics:
                             # 获取总市值
-                            market_cap = realtime_metrics.get('market_cap')
-                            if market_cap is not None and market_cap > 0:
-                                is_realtime = realtime_metrics.get('is_realtime', False)
-                                realtime_tag = " (实时)" if is_realtime else ""
-                                metrics["total_mv"] = f"{market_cap:.2f}亿元{realtime_tag}"
-                                logger.info(f"✅ [AKShare-总市值获取成功] 总市值={market_cap:.2f}亿元 | 实时={is_realtime}")
+                            if "total_mv" not in metrics:
+                                market_cap = realtime_metrics.get('market_cap')
+                                if market_cap is not None and market_cap > 0:
+                                    metrics["total_mv"] = f"{market_cap:.2f}亿元"
+                                    logger.info(f"✅ [总市值-第2层成功] 总市值={market_cap:.2f}亿元")
 
                             # 使用实时PE
-                            pe_value = realtime_metrics.get('pe')
-                            if pe_value is not None and pe_value > 0:
-                                is_realtime = realtime_metrics.get('is_realtime', False)
-                                realtime_tag = " (实时)" if is_realtime else ""
-                                metrics["pe"] = f"{pe_value:.1f}倍{realtime_tag}"
-                                logger.info(f"✅ [AKShare-PE计算-第1层成功] PE={pe_value:.2f}倍 | 来源={realtime_metrics.get('source')} | 实时={is_realtime}")
+                            pe_rt = realtime_metrics.get('pe')
+                            if pe_rt is not None and pe_rt > 0:
+                                metrics["pe"] = f"{pe_rt:.1f}倍"
+                                pe_value = pe_rt
+                                logger.info(f"✅ [PE计算-第2层成功] PE={pe_rt:.2f}倍 | 来源={realtime_metrics.get('source')}")
 
                             # 使用实时PE_TTM
-                            pe_ttm_value = realtime_metrics.get('pe_ttm')
-                            if pe_ttm_value is not None and pe_ttm_value > 0:
-                                is_realtime = realtime_metrics.get('is_realtime', False)
-                                realtime_tag = " (实时)" if is_realtime else ""
-                                metrics["pe_ttm"] = f"{pe_ttm_value:.1f}倍{realtime_tag}"
-                                logger.info(f"✅ [AKShare-PE_TTM计算-第1层成功] PE_TTM={pe_ttm_value:.2f}倍")
+                            pe_ttm_rt = realtime_metrics.get('pe_ttm')
+                            if pe_ttm_rt is not None and pe_ttm_rt > 0:
+                                metrics["pe_ttm"] = f"{pe_ttm_rt:.1f}倍"
+                                pe_ttm_value = pe_ttm_rt
 
                             # 使用实时PB
-                            pb_value = realtime_metrics.get('pb')
-                            if pb_value is not None and pb_value > 0:
-                                is_realtime = realtime_metrics.get('is_realtime', False)
-                                realtime_tag = " (实时)" if is_realtime else ""
-                                metrics["pb"] = f"{pb_value:.2f}倍{realtime_tag}"
-                                logger.info(f"✅ [AKShare-PB计算-第1层成功] PB={pb_value:.2f}倍")
+                            if pb_value is None:
+                                pb_rt = realtime_metrics.get('pb')
+                                if pb_rt is not None and pb_rt > 0:
+                                    metrics["pb"] = f"{pb_rt:.2f}倍"
+                                    pb_value = pb_rt
+                                    logger.info(f"✅ [PB计算-第2层成功] PB={pb_rt:.2f}倍")
                         else:
-                            logger.warning(f"⚠️ [AKShare-PE计算-第1层失败] 实时计算返回空结果，将尝试降级计算")
-            except Exception as e:
-                logger.warning(f"⚠️ [AKShare-PE计算-第1层异常] 实时计算失败: {e}，将尝试降级计算")
+                            logger.warning(f"⚠️ [PE计算-第2层失败] 实时计算返回空结果")
+                except Exception as e:
+                    logger.warning(f"⚠️ [PE计算-第2层异常] 实时计算失败: {e}")
 
             # 获取ROE - 直接从指标中获取
             roe_value = indicators_dict.get('净资产收益率(ROE)')
@@ -1472,64 +1755,24 @@ class OptimizedChinaDataProvider:
                     metrics["total_mv"] = "N/A"
                     logger.warning(f"⚠️ [AKShare-总市值-全部失败] 无可用总市值数据")
 
-            # 🔥 如果实时计算失败，降级到传统计算方式
+            # 🔥 如果第1层和第2层都失败，最后降级使用股价/单期EPS计算（注意：可能严重失真）
             if pe_value is None:
-                logger.info(f"📊 [AKShare-PE计算-第2层] 尝试使用股价/EPS计算")
-
-                # 计算 PE - 优先使用 TTM 数据
-                # 尝试从 main_indicators DataFrame 计算 TTM EPS
-                ttm_eps = None
-                try:
-                    # main_indicators 是 DataFrame，包含多期数据
-                    # 尝试计算 TTM EPS
-                    if '基本每股收益' in main_indicators['指标'].values:
-                        # 提取基本每股收益的所有期数数据
-                        eps_row = main_indicators[main_indicators['指标'] == '基本每股收益']
-                        if not eps_row.empty:
-                            # 获取所有数值列（排除'指标'列）
-                            value_cols = [col for col in eps_row.columns if col != '指标']
-
-                            # 构建 DataFrame 用于 TTM 计算
-                            import pandas as pd
-                            eps_data = []
-                            for col in value_cols:
-                                eps_val = eps_row[col].iloc[0]
-                                if eps_val is not None and str(eps_val) != 'nan' and eps_val != '--':
-                                    eps_data.append({'报告期': col, '基本每股收益': eps_val})
-
-                            if len(eps_data) >= 2:
-                                eps_df = pd.DataFrame(eps_data)
-                                # 使用 TTM 计算函数
-                                from scripts.sync_financial_data import _calculate_ttm_metric
-                                ttm_eps = _calculate_ttm_metric(eps_df, '基本每股收益')
-                                if ttm_eps:
-                                    logger.info(f"✅ 计算 TTM EPS: {ttm_eps:.4f} 元")
-                except Exception as e:
-                    logger.debug(f"计算 TTM EPS 失败: {e}")
-
-                # 使用 TTM EPS 或单期 EPS 计算 PE
-                eps_for_pe = ttm_eps if ttm_eps else None
-                pe_type = "TTM" if ttm_eps else "单期"
-
-                if not eps_for_pe:
-                    # 降级到单期 EPS
-                    eps_value = indicators_dict.get('基本每股收益')
-                    if eps_value is not None and str(eps_value) != 'nan' and eps_value != '--':
-                        try:
-                            eps_for_pe = float(eps_value)
-                        except (ValueError, TypeError):
-                            pass
-
-                if eps_for_pe and eps_for_pe > 0:
-                    pe_val = price_value / eps_for_pe
-                    metrics["pe"] = f"{pe_val:.1f}倍"
-                    logger.info(f"✅ [AKShare-PE计算-第2层成功] PE({pe_type}): 股价{price_value} / EPS{eps_for_pe:.4f} = {metrics['pe']}")
-                elif eps_for_pe and eps_for_pe <= 0:
-                    metrics["pe"] = "N/A（亏损）"
-                    logger.warning(f"⚠️ [AKShare-PE计算-第2层失败] 亏损股票，EPS={eps_for_pe}")
+                logger.warning(f"📊 [PE计算-第3层] Tushare和实时计算均失败，降级使用股价/单期EPS（可能失真）")
+                eps_value = indicators_dict.get('基本每股收益')
+                if eps_value is not None and str(eps_value) != 'nan' and eps_value != '--':
+                    try:
+                        eps_float = float(eps_value)
+                        if eps_float > 0:
+                            pe_val = price_value / eps_float
+                            metrics["pe"] = f"{pe_val:.1f}倍"
+                            logger.warning(f"⚠️ [PE计算-第3层] PE(单期): 股价{price_value} / EPS{eps_float:.4f} = {metrics['pe']}（仅单季度，可能失真）")
+                        else:
+                            metrics["pe"] = "N/A（亏损）"
+                    except (ValueError, TypeError):
+                        metrics["pe"] = "N/A"
                 else:
                     metrics["pe"] = "N/A"
-                    logger.error(f"❌ [AKShare-PE计算-全部失败] 无可用EPS数据")
+                    logger.error(f"❌ [PE计算-全部失败] 无可用PE数据")
 
             # 🔥 如果实时PB计算失败，降级到传统计算方式
             if pb_value is None:
@@ -1695,16 +1938,134 @@ class OptimizedChinaDataProvider:
                 "data_source": "AKShare"
             })
 
+            # 🔥 新增：添加数据时间和来源字段
+            # 从 AKShare 数据中提取时间信息
+            # latest_col 是数据期间（如 "2024-09-30"）
+            metrics["valuation_data_time"] = str(latest_col)[:10] if latest_col else "N/A"
+            metrics["report_period"] = str(latest_col)[:10] if latest_col else "N/A"
+            metrics["data_update_time"] = "N/A"  # AKShare 无更新时间字段
+
+            # 为每个关键指标添加独立的时间字段
+            metrics["pe_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["pe_ttm_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["pb_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["roe_time"] = metrics.get("report_period", "N/A")
+            metrics["roa_time"] = metrics.get("report_period", "N/A")
+            metrics["gross_margin_time"] = metrics.get("report_period", "N/A")
+            metrics["net_margin_time"] = metrics.get("report_period", "N/A")
+            metrics["debt_ratio_time"] = metrics.get("report_period", "N/A")
+
             logger.info(f"✅ AKShare财务数据解析成功: PE={metrics['pe']}, PB={metrics['pb']}, ROE={metrics['roe']}")
+            logger.info(f"   └─ 数据时间: 估值={metrics.get('valuation_data_time')}, 财报={metrics.get('report_period')}")
             return metrics
 
         except Exception as e:
             logger.error(f"❌ AKShare财务数据解析失败: {e}")
             return None
 
+    def _parse_tushare_standardized_data(self, financial_data: dict) -> dict:
+        """解析 Tushare 标准化财务数据为报告指标"""
+        try:
+            def fmt_number(value, suffix="", decimals=2):
+                if value is None or str(value) == 'nan':
+                    return "N/A"
+                try:
+                    return f"{float(value):.{decimals}f}{suffix}"
+                except (ValueError, TypeError):
+                    return "N/A"
+
+            # 🔥 修复：优先使用 PE_TTM 而不是静态 PE
+            # 静态 PE 是基于单季度每股收益计算的，可能因季节性波动而失真
+            # PE_TTM 是基于过去12个月净利润计算的，更能反映真实估值水平
+            pe_value = financial_data.get('pe_ttm') if financial_data.get('pe_ttm') else financial_data.get('pe')
+            pe_source = "PE_TTM" if financial_data.get('pe_ttm') else "PE(静态)"
+
+            metrics = {
+                "total_mv": fmt_number((financial_data.get('total_mv') or 0) / 10000, "亿元", 2) if financial_data.get('total_mv') else "N/A",
+                "pe": fmt_number(pe_value, "倍", 1),
+                "pe_ttm": fmt_number(financial_data.get('pe_ttm'), "倍", 1),
+                "pb": fmt_number(financial_data.get('pb'), "倍", 2),
+                "peg": fmt_number(financial_data.get('peg'), "", 2),
+                "ps": "N/A",
+                "dividend_yield": "N/A",
+                "roe": fmt_number(financial_data.get('roe') or financial_data.get('roe_waa'), "%", 1),
+                "roa": fmt_number(financial_data.get('roa') or financial_data.get('roa2'), "%", 1),
+                "gross_margin": fmt_number(financial_data.get('gross_margin'), "%", 1),
+                "net_margin": fmt_number(financial_data.get('netprofit_margin'), "%", 1),
+                "debt_ratio": fmt_number(financial_data.get('debt_to_assets'), "%", 1),
+                "current_ratio": fmt_number(financial_data.get('current_ratio'), "", 2),
+                "quick_ratio": fmt_number(financial_data.get('quick_ratio'), "", 2),
+                "cash_ratio": fmt_number(financial_data.get('cash_ratio'), "", 2),
+                "eps": fmt_number(financial_data.get('eps'), "元", 4),
+                "bps": fmt_number(financial_data.get('bps'), "元", 4),
+                "netprofit_yoy": fmt_number(financial_data.get('netprofit_yoy'), "%", 1),
+                "or_yoy": fmt_number(financial_data.get('or_yoy'), "%", 1),
+                "fundamental_score": 7.0,
+                "valuation_score": 6.5,
+                "growth_score": 7.0,
+                "risk_level": "中等",
+                "data_source": "Tushare",
+                "pe_source": pe_source  # 记录 PE 数据来源，便于调试
+            }
+
+            # 🔥 新增：添加数据时间和来源字段
+            # 从 Tushare 数据中提取时间信息
+            trade_date = financial_data.get('trade_date')
+            report_period = financial_data.get('ann_date') or financial_data.get('report_period')
+            updated_at = financial_data.get('updated_at')
+
+            # 格式化时间字段
+            if trade_date:
+                if hasattr(trade_date, 'strftime'):
+                    metrics["valuation_data_time"] = trade_date.strftime('%Y-%m-%d')
+                else:
+                    metrics["valuation_data_time"] = str(trade_date)[:10] if len(str(trade_date)) >= 10 else str(trade_date)
+            else:
+                metrics["valuation_data_time"] = "N/A"
+
+            if report_period:
+                if hasattr(report_period, 'strftime'):
+                    metrics["report_period"] = report_period.strftime('%Y-%m-%d')
+                else:
+                    metrics["report_period"] = str(report_period)[:10] if len(str(report_period)) >= 10 else str(report_period)
+            else:
+                metrics["report_period"] = "N/A"
+
+            if updated_at:
+                if hasattr(updated_at, 'strftime'):
+                    metrics["data_update_time"] = updated_at.strftime('%Y-%m-%d %H:%M')
+                else:
+                    metrics["data_update_time"] = str(updated_at)[:19] if len(str(updated_at)) >= 19 else str(updated_at)
+            else:
+                metrics["data_update_time"] = "N/A"
+
+            # 为每个关键指标添加独立的时间字段
+            metrics["pe_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["pe_ttm_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["pb_time"] = metrics.get("valuation_data_time", "N/A")
+            metrics["roe_time"] = metrics.get("report_period", "N/A")
+            metrics["roa_time"] = metrics.get("report_period", "N/A")
+            metrics["gross_margin_time"] = metrics.get("report_period", "N/A")
+            metrics["net_margin_time"] = metrics.get("report_period", "N/A")
+            metrics["debt_ratio_time"] = metrics.get("report_period", "N/A")
+
+            logger.info(
+                f"✅ Tushare 标准化财务数据解析成功: "
+                f"PE={metrics.get('pe')} (使用{pe_source}), PE_TTM={metrics.get('pe_ttm')}, "
+                f"PB={metrics.get('pb')}, PEG={metrics.get('peg')}, ROE={metrics.get('roe')}"
+            )
+            logger.info(f"   └─ 数据时间: 估值={metrics.get('valuation_data_time')}, 财报={metrics.get('report_period')}, 更新={metrics.get('data_update_time')}")
+            return metrics
+        except Exception as e:
+            logger.error(f"❌ Tushare标准化财务数据解析失败: {e}")
+            return None
+
     def _parse_financial_data(self, financial_data: dict, stock_info: dict, price_value: float) -> dict:
         """解析财务数据为指标"""
         try:
+            if financial_data.get('data_source') == 'tushare' and 'raw_data' in financial_data:
+                return self._parse_tushare_standardized_data(financial_data)
+
             # 获取最新的财务数据
             balance_sheet = financial_data.get('balance_sheet', [])
             income_statement = financial_data.get('income_statement', [])

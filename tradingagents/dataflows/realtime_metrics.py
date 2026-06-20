@@ -82,144 +82,169 @@ def calculate_realtime_pe_pb(
         logger.info(f"   ✓ 实时股价: {realtime_price}元 (更新时间: {quote_updated_at})")
         logger.info(f"   ✓ 昨日收盘价: {pre_close}元")
 
-        # 2. 获取基础信息（stock_basic_info）- 获取 Tushare 的 pe_ttm 和市值数据
-        # 🔥 优先查询 Tushare 数据源（因为只有 Tushare 有 pe_ttm、total_mv、total_share 等字段）
-        logger.info(f"🔍 [MongoDB查询] 查询条件: code={code6}, source=tushare")
-        basic_info = db.stock_basic_info.find_one({"code": code6, "source": "tushare"})
+        # 2. 获取估值指标 - 优先从 stock_financial_data（Tushare financial_sync 写入，含 pe_ttm/pb/total_mv）
+        #    如果没有，再从 stock_basic_info 查询（可能由其他同步写入）
+        #    注意：stock_basic_info 仅含代码/名称/行业等基础信息，不含 pe_ttm
+        logger.info(f"🔍 [MongoDB查询] 查询条件: code={code6}, data_source=tushare")
 
-        if not basic_info:
-            # 🔥 诊断：查看 MongoDB 中有哪些数据源
-            all_sources = list(db.stock_basic_info.find({"code": code6}, {"source": 1, "_id": 0}))
-            logger.warning(f"⚠️ [动态PE计算] 未找到 Tushare 数据")
-            logger.warning(f"   MongoDB 中该股票的数据源: {[s.get('source') for s in all_sources]}")
+        # 2a: 优先从 stock_financial_data 获取估值指标
+        fin_data = db.stock_financial_data.find_one(
+            {"code": code6, "data_source": "tushare"},
+            sort=[("updated_at", -1)]
+        )
+        if not fin_data:
+            fin_data = db.stock_financial_data.find_one(
+                {"symbol": code6, "data_source": "tushare"},
+                sort=[("updated_at", -1)]
+            )
 
-            # 如果没有 Tushare 数据，尝试查询其他数据源
-            basic_info = db.stock_basic_info.find_one({"code": code6})
+        # 2b: 如果 stock_financial_data 没有，再从 stock_basic_info 查询
+        basic_info = None
+        if not fin_data:
+            logger.info(f"   stock_financial_data 未找到 {code6} 的数据，尝试 stock_basic_info")
+            basic_info = db.stock_basic_info.find_one({"code": code6, "source": "tushare"})
             if not basic_info:
-                logger.warning(f"⚠️ [动态PE计算-失败] 未找到股票 {code6} 的基础信息")
-                logger.warning(f"   建议: 运行 Tushare 数据同步任务，确保 stock_basic_info 集合有 Tushare 数据")
-                return None
+                basic_info = db.stock_basic_info.find_one({"code": code6})
+
+        # 合并数据源：优先使用 stock_financial_data，降级到 stock_basic_info
+        valuation_source = fin_data or basic_info
+        if not valuation_source:
+            logger.warning(f"⚠️ [动态PE计算-失败] 未找到股票 {code6} 的估值数据")
+            logger.warning(f"   建议: 运行 Tushare 数据同步任务，确保 stock_financial_data 集合有数据")
+            return None
+
+        data_source_name = "stock_financial_data" if fin_data else "stock_basic_info"
+        logger.info(f"   ✓ 使用数据源: {data_source_name}")
+
+        # 获取估值指标（从 valuation_source 统一读取）
+        # stock_financial_data 中 total_mv 单位是万元，需转为亿元
+        # stock_basic_info 中 total_mv 可能已经是亿元
+        pe_ttm_tushare = valuation_source.get("pe_ttm")
+        pe_tushare = valuation_source.get("pe")
+        pb_tushare = valuation_source.get("pb")
+        raw_total_mv = valuation_source.get("total_mv")
+        total_share = valuation_source.get("total_share")  # 总股本（万股）
+        valuation_updated_at = valuation_source.get("updated_at")  # 更新时间
+
+        # 处理 total_mv 单位差异
+        # stock_financial_data: total_mv 单位是万元 → 转为亿元
+        # stock_basic_info: total_mv 可能是亿元
+        if raw_total_mv and raw_total_mv > 0:
+            if fin_data:
+                # stock_financial_data 的 total_mv 单位是万元
+                total_mv_yi = raw_total_mv / 10000  # 万元 → 亿元
             else:
-                logger.warning(f"⚠️ [动态PE计算] 使用其他数据源: {basic_info.get('source', 'unknown')}")
-                # 如果不是 Tushare 数据，可能缺少关键字段，直接返回 None
-                if basic_info.get('source') != 'tushare':
-                    logger.warning(f"⚠️ [动态PE计算-失败] 数据源 {basic_info.get('source')} 不包含 pe_ttm 等字段")
-                    logger.warning(f"   可用字段: {list(basic_info.keys())}")
-                    return None
+                # stock_basic_info 的 total_mv 可能已经是亿元
+                total_mv_yi = raw_total_mv
+        else:
+            total_mv_yi = None
 
-        # 获取 Tushare 的 pe_ttm（基于昨日收盘价）
-        pe_ttm_tushare = basic_info.get("pe_ttm")
-        pe_tushare = basic_info.get("pe")
-        pb_tushare = basic_info.get("pb")
-        total_mv_yi = basic_info.get("total_mv")  # 总市值（亿元）
-        total_share = basic_info.get("total_share")  # 总股本（万股）
-        basic_info_updated_at = basic_info.get("updated_at")  # 更新时间
+        # 如果 stock_financial_data 没有 total_share，尝试从 stock_basic_info 获取
+        if not total_share and basic_info:
+            total_share = basic_info.get("total_share")
+            if not total_mv_yi:
+                raw_mv = basic_info.get("total_mv")
+                if raw_mv and raw_mv > 0:
+                    total_mv_yi = raw_mv  # stock_basic_info 的 total_mv 可能是亿元
 
-        logger.info(f"   ✓ Tushare PE_TTM: {pe_ttm_tushare}倍")
+        logger.info(f"   ✓ Tushare PE_TTM: {pe_ttm_tushare}倍 (来源: {data_source_name})")
         logger.info(f"   ✓ Tushare PE: {pe_tushare}倍")
         logger.info(f"   ✓ Tushare 总市值: {total_mv_yi}亿元")
         logger.info(f"   ✓ 总股本: {total_share}万股")
-        logger.info(f"   ✓ stock_basic_info 更新时间: {basic_info_updated_at}")
+        logger.info(f"   ✓ 数据更新时间: {valuation_updated_at}")
 
         # 🔥 3. 判断是否需要重新计算市值
-        # 如果 stock_basic_info 的更新时间在今天收盘后（15:00之后），说明数据已经是最新的
+        # 如果估值数据的更新时间在今天收盘后（15:00之后），说明数据已经是最新的
         from datetime import datetime, time as dtime
         from zoneinfo import ZoneInfo
 
         need_recalculate = True
-        if basic_info_updated_at:
+        if valuation_updated_at:
             # 确保时间带有时区信息
-            if isinstance(basic_info_updated_at, datetime):
-                if basic_info_updated_at.tzinfo is None:
-                    basic_info_updated_at = basic_info_updated_at.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+            if isinstance(valuation_updated_at, datetime):
+                if valuation_updated_at.tzinfo is None:
+                    valuation_updated_at = valuation_updated_at.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
 
                 # 获取今天的日期
                 today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-                update_date = basic_info_updated_at.date()
-                update_time = basic_info_updated_at.time()
+                update_date = valuation_updated_at.date()
+                update_time = valuation_updated_at.time()
 
                 # 如果更新日期是今天，且更新时间在15:00之后，说明数据已经是今天收盘后的最新数据
                 if update_date == today and update_time >= dtime(15, 0):
                     need_recalculate = False
-                    logger.info(f"   💡 stock_basic_info 已在今天收盘后更新，直接使用其数据")
+                    logger.info(f"   💡 估值数据已在今天收盘后更新，直接使用其数据")
 
         if not need_recalculate:
-            # 直接使用 stock_basic_info 的数据，不需要重新计算
-            logger.info(f"   ✓ 使用 stock_basic_info 的最新数据（无需重新计算）")
+            # 直接使用估值数据，不需要重新计算
+            logger.info(f"   ✓ 使用 {data_source_name} 的最新数据（无需重新计算）")
+            
+            # 🔥 修复：优先使用 PE_TTM 而不是静态 PE
+            pe_to_use = round(pe_ttm_tushare, 2) if pe_ttm_tushare else (round(pe_tushare, 2) if pe_tushare else None)
 
             result = {
-                "pe": round(pe_tushare, 2) if pe_tushare else None,
+                "pe": pe_to_use,
                 "pb": round(pb_tushare, 2) if pb_tushare else None,
                 "pe_ttm": round(pe_ttm_tushare, 2) if pe_ttm_tushare else None,
                 "price": round(realtime_price, 2),
                 "market_cap": round(total_mv_yi, 2) if total_mv_yi else None,
                 "updated_at": quote.get("updated_at"),
-                "source": "stock_basic_info_latest",
+                "source": f"{data_source_name}_latest",
                 "is_realtime": False,
-                "note": "使用stock_basic_info收盘后最新数据",
+                "note": f"使用{data_source_name}收盘后最新数据，优先使用PE_TTM",
             }
 
-            logger.info(f"✅ [动态PE计算-成功] 股票 {code6}: PE_TTM={result['pe_ttm']}倍, PB={result['pb']}倍 (来自stock_basic_info)")
+            logger.info(f"✅ [动态PE计算-成功] 股票 {code6}: PE={result['pe']}倍 (使用PE_TTM={pe_ttm_tushare}或PE={pe_tushare}), PB={result['pb']}倍 (来自{data_source_name})")
             return result
 
-        # 4. 🔥 计算总股本（需要判断 stock_basic_info 的市值是昨天的还是今天的）
+        # 4. 🔥 计算总股本（需要判断估值数据的市值是昨天的还是今天的）
         total_shares_wan = None
         yesterday_mv_yi = None
 
-        # 方案1：优先使用 stock_basic_info 中的 total_share（如果有）
+        # 方案1：优先使用估值数据中的 total_share（如果有）
         if total_share and total_share > 0:
             total_shares_wan = total_share
-            logger.info(f"   ✓ 使用 stock_basic_info.total_share: {total_shares_wan:.2f}万股")
+            logger.info(f"   ✓ 使用 total_share: {total_shares_wan:.2f}万股")
 
             # 计算昨日市值 = 总股本 × 昨日收盘价
             if pre_close and pre_close > 0:
                 yesterday_mv_yi = (total_shares_wan * pre_close) / 10000
                 logger.info(f"   ✓ 昨日市值: {total_shares_wan:.2f}万股 × {pre_close:.2f}元 / 10000 = {yesterday_mv_yi:.2f}亿元")
             elif total_mv_yi and total_mv_yi > 0:
-                # 如果没有昨日收盘价，使用 stock_basic_info 的市值（假设是昨天的）
                 yesterday_mv_yi = total_mv_yi
-                logger.info(f"   ⚠️ market_quotes 中无 pre_close，使用 stock_basic_info 市值作为昨日市值: {yesterday_mv_yi:.2f}亿元")
+                logger.info(f"   ⚠️ market_quotes 中无 pre_close，使用估值数据市值作为昨日市值: {yesterday_mv_yi:.2f}亿元")
             else:
-                # 既没有 pre_close，也没有 total_mv_yi，无法计算
                 logger.warning(f"⚠️ [动态PE计算-失败] 无法获取昨日市值: pre_close={pre_close}, total_mv={total_mv_yi}")
                 return None
 
         # 方案2：使用 market_quotes 的 pre_close（昨日收盘价）反推股本
         elif pre_close and pre_close > 0 and total_mv_yi and total_mv_yi > 0:
-            # 🔥 关键：判断 total_mv_yi 是昨天的还是今天的
-            # 如果 stock_basic_info 更新时间在今天收盘前，说明 total_mv_yi 是昨天的市值
-            # 如果更新时间在今天收盘后，说明 total_mv_yi 是今天的市值，需要用 realtime_price 反推
-
-            # 判断 stock_basic_info 是否是昨天的数据
+            # 判断估值数据是否是昨天的数据
             is_yesterday_data = True
-            if basic_info_updated_at and isinstance(basic_info_updated_at, datetime):
-                if basic_info_updated_at.tzinfo is None:
-                    basic_info_updated_at = basic_info_updated_at.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+            if valuation_updated_at and isinstance(valuation_updated_at, datetime):
+                if valuation_updated_at.tzinfo is None:
+                    valuation_updated_at = valuation_updated_at.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
                 today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-                update_date = basic_info_updated_at.date()
-                update_time = basic_info_updated_at.time()
-                # 如果更新日期是今天，且更新时间在15:00之后，说明是今天的数据
+                update_date = valuation_updated_at.date()
+                update_time = valuation_updated_at.time()
                 if update_date == today and update_time >= dtime(15, 0):
                     is_yesterday_data = False
 
             if is_yesterday_data:
-                # total_mv_yi 是昨天的市值，用 pre_close 反推股本
                 total_shares_wan = (total_mv_yi * 10000) / pre_close
                 yesterday_mv_yi = total_mv_yi
-                logger.info(f"   ✓ stock_basic_info 是昨天的数据，用 pre_close 反推总股本: {total_mv_yi:.2f}亿元 / {pre_close:.2f}元 = {total_shares_wan:.2f}万股")
+                logger.info(f"   ✓ 估值数据是昨天的，用 pre_close 反推总股本: {total_mv_yi:.2f}亿元 / {pre_close:.2f}元 = {total_shares_wan:.2f}万股")
             else:
-                # total_mv_yi 是今天的市值，用 realtime_price 反推股本
                 total_shares_wan = (total_mv_yi * 10000) / realtime_price
                 yesterday_mv_yi = (total_shares_wan * pre_close) / 10000
-                logger.info(f"   ✓ stock_basic_info 是今天的数据，用 realtime_price 反推总股本: {total_mv_yi:.2f}亿元 / {realtime_price:.2f}元 = {total_shares_wan:.2f}万股")
+                logger.info(f"   ✓ 估值数据是今天的，用 realtime_price 反推总股本: {total_mv_yi:.2f}亿元 / {realtime_price:.2f}元 = {total_shares_wan:.2f}万股")
                 logger.info(f"   ✓ 昨日市值: {total_shares_wan:.2f}万股 × {pre_close:.2f}元 / 10000 = {yesterday_mv_yi:.2f}亿元")
 
         # 方案3：只有 total_mv_yi，没有 pre_close（market_quotes 数据不完整）
         elif total_mv_yi and total_mv_yi > 0:
-            # 使用 realtime_price 反推股本，假设 total_mv_yi 是昨天的市值
             total_shares_wan = (total_mv_yi * 10000) / realtime_price
             yesterday_mv_yi = total_mv_yi
-            logger.warning(f"   ⚠️ market_quotes 中无 pre_close，假设 stock_basic_info.total_mv 是昨日市值")
+            logger.warning(f"   ⚠️ market_quotes 中无 pre_close，假设估值数据中的 total_mv 是昨日市值")
             logger.info(f"   ✓ 用 realtime_price 反推总股本: {total_mv_yi:.2f}亿元 / {realtime_price:.2f}元 = {total_shares_wan:.2f}万股")
             logger.info(f"   ✓ 昨日市值（假设）: {yesterday_mv_yi:.2f}亿元")
 
@@ -393,46 +418,95 @@ def get_pe_pb_with_fallback(
         else:
             logger.warning(f"⚠️ [PE智能策略-方案1异常] 动态PE/PB超出合理范围 (PE={pe}, PB={pb})")
 
-    # 2. 降级到 Tushare 静态 PE（基于昨日收盘价）
-    logger.info("   → 尝试方案2: Tushare静态PE (基于昨日收盘价)")
-    logger.info("   💡 说明: 使用Tushare官方PE_TTM，基于昨日收盘价")
+    # 2. 降级到数据库中的 Tushare 估值数据（基于昨日收盘价）
+    logger.info("   → 尝试方案2: 从数据库获取Tushare估值数据")
+    logger.info("   💡 说明: 优先从stock_financial_data获取PE_TTM，降级到stock_basic_info")
 
     try:
         db = db_client['tradingagents']
         code6 = str(symbol).zfill(6)
 
-        # 🔥 优先查询 Tushare 数据源
-        basic_info = db.stock_basic_info.find_one({"code": code6, "source": "tushare"})
-        if not basic_info:
-            # 如果没有 Tushare 数据，尝试查询其他数据源
-            basic_info = db.stock_basic_info.find_one({"code": code6})
+        # 2a: 优先从 stock_financial_data 获取估值指标（Tushare financial_sync 写入）
+        fin_data = db.stock_financial_data.find_one(
+            {"code": code6, "data_source": "tushare"},
+            sort=[("updated_at", -1)]
+        )
+        if not fin_data:
+            fin_data = db.stock_financial_data.find_one(
+                {"symbol": code6, "data_source": "tushare"},
+                sort=[("updated_at", -1)]
+            )
 
-        if basic_info:
-            pe_static = basic_info.get("pe")
-            pb_static = basic_info.get("pb")
-            pe_ttm = basic_info.get("pe_ttm")
-            pb_mrq = basic_info.get("pb_mrq")
-            updated_at = basic_info.get("updated_at", "N/A")
+        # 2b: 如果 stock_financial_data 没有，再从 stock_basic_info 查询
+        basic_info = None
+        if not fin_data:
+            basic_info = db.stock_basic_info.find_one({"code": code6, "source": "tushare"})
+            if not basic_info:
+                basic_info = db.stock_basic_info.find_one({"code": code6})
+
+        # 合并数据源
+        valuation_source = fin_data or basic_info
+        if valuation_source:
+            pe_static = valuation_source.get("pe")
+            pb_static = valuation_source.get("pb")
+            pe_ttm = valuation_source.get("pe_ttm")
+            pb_mrq = valuation_source.get("pb_mrq")
+            updated_at = valuation_source.get("updated_at", "N/A")
+            data_source_name = "stock_financial_data" if fin_data else "stock_basic_info"
 
             if pe_ttm or pe_static or pb_static:
-                logger.info(f"✅ [PE智能策略-成功] 使用Tushare静态PE: PE={pe_static}, PE_TTM={pe_ttm}, PB={pb_static}")
-                logger.info(f"   └─ 数据来源: stock_basic_info (更新时间: {updated_at})")
+                # 🔥 修复：优先使用 PE_TTM 而不是静态 PE
+                pe_to_use = pe_ttm if pe_ttm else pe_static
+                pe_type_used = "PE_TTM" if pe_ttm else "PE(静态)"
+                
+                logger.info(f"✅ [PE智能策略-成功] 使用Tushare PE: PE={pe_to_use}, 原始PE_TTM={pe_ttm}, 原始PE(静态)={pe_static}")
+                logger.info(f"   └─ 选择原因: 优先使用{pe_type_used}以获得更准确的估值指标")
+                logger.info(f"   └─ 数据来源: {data_source_name} (更新时间: {updated_at})")
 
                 return {
-                    "pe": pe_static,
+                    "pe": pe_to_use,
                     "pb": pb_static,
                     "pe_ttm": pe_ttm,
                     "pb_mrq": pb_mrq,
-                    "source": "daily_basic",
+                    "source": data_source_name,
                     "is_realtime": False,
                     "updated_at": updated_at,
-                    "note": "使用Tushare最近一个交易日的数据（基于TTM）"
+                    "note": f"从{data_source_name}获取，优先使用PE_TTM"
                 }
 
-        logger.warning("⚠️ [PE智能策略-方案2失败] Tushare静态数据不可用")
+        logger.warning("⚠️ [PE智能策略-方案2失败] 数据库中无Tushare估值数据")
 
     except Exception as e:
         logger.warning(f"⚠️ [PE智能策略-方案2异常] {e}")
+
+    # 3. 最终降级：直接从 Tushare API 获取
+    logger.info("   → 尝试方案3: 直接从Tushare API获取PE_TTM")
+    try:
+        from tradingagents.dataflows.providers.china.tushare import get_tushare_provider
+        provider = get_tushare_provider()
+        if provider.connected:
+            ts_code = f"{code6}.SZ" if code6.startswith(('0', '3')) else f"{code6}.SH"
+            daily_basic = provider._run_async(provider.api.daily_basic, ts_code=ts_code, trade_date=datetime.now().strftime('%Y%m%d'), fields='ts_code,pe,pe_ttm,pb')
+            if daily_basic is not None and not daily_basic.empty:
+                row = daily_basic.iloc[0]
+                pe_ttm_api = float(row.get('pe_ttm', 0)) if row.get('pe_ttm') else None
+                pe_api = float(row.get('pe', 0)) if row.get('pe') else None
+                pb_api = float(row.get('pb', 0)) if row.get('pb') else None
+
+                pe_to_use = pe_ttm_api if pe_ttm_api else pe_api
+                if pe_to_use:
+                    logger.info(f"✅ [PE智能策略-成功] 从Tushare API获取: PE={pe_to_use}")
+                    return {
+                        "pe": pe_to_use,
+                        "pb": pb_api,
+                        "pe_ttm": pe_ttm_api,
+                        "source": "tushare_api",
+                        "is_realtime": False,
+                        "updated_at": datetime.now().isoformat(),
+                        "note": "从Tushare API直接获取，优先使用PE_TTM"
+                    }
+    except Exception as e:
+        logger.warning(f"⚠️ [PE智能策略-方案3异常] Tushare API获取失败: {e}")
 
     logger.error(f"❌ [PE智能策略-全部失败] 无法获取股票 {symbol} 的PE/PB")
     return {}

@@ -152,8 +152,8 @@ services:
   frontend:
     # 支持本地构建或从Docker Hub拉取
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
     image: hsliup/tradingagents-frontend:v1.0.1
     container_name: tradingagents-frontend
     restart: unless-stopped

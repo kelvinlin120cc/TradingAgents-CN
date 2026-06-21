@@ -650,7 +650,7 @@ class TushareProvider(BaseStockDataProvider):
             return None
     
     async def get_financial_data(self, symbol: str, report_type: str = "quarterly",
-                                period: str = None, limit: int = 4) -> Optional[Dict[str, Any]]:
+                                period: str = None, limit: int = 10) -> Optional[Dict[str, Any]]:
         """
         获取财务数据
 
@@ -683,9 +683,12 @@ class TushareProvider(BaseStockDataProvider):
             financial_data = {}
 
             # 1. 获取利润表数据 (income statement)
+            # 🔥 添加 profit_dedt（扣非归母净利润）字段，用于 PEG 计算
+            income_fields = 'ts_code,ann_date,end_date,revenue,oper_cost,total_profit,n_income,n_income_attr_p,profit_dedt,basic_eps'
             try:
                 income_df = await asyncio.to_thread(
                     self.api.income,
+                    fields=income_fields,
                     **query_params
                 )
                 if income_df is not None and not income_df.empty:
@@ -1081,8 +1084,11 @@ class TushareProvider(BaseStockDataProvider):
                 query_params['end_date'] = end_period
 
             # 获取利润表数据作为主要数据源
+            # 🔥 添加 profit_dedt（扣非归母净利润）字段，用于 PEG 计算
+            income_fields = 'ts_code,ann_date,end_date,revenue,oper_cost,total_profit,n_income,n_income_attr_p,profit_dedt,basic_eps'
             income_df = await asyncio.to_thread(
                 self.api.income,
+                fields=income_fields,
                 **query_params
             )
 
@@ -1343,19 +1349,38 @@ class TushareProvider(BaseStockDataProvider):
             latest_indicator = financial_data.get('financial_indicators', [{}])[0] if financial_data.get('financial_indicators') else {}
             latest_daily_basic = financial_data.get('daily_basic', [{}])[0] if financial_data.get('daily_basic') else {}
 
+            # 🔥 修复 PEG 计算：使用 TTM 扣非归母净利润增长率（更准确反映主业盈利）
+            # PEG = PE_TTM / TTM扣非净利润增长率（确保同周期同口径）
             pe_ttm = self._safe_float(latest_daily_basic.get('pe_ttm'))
-            netprofit_yoy = self._safe_float(latest_indicator.get('netprofit_yoy'))
-            peg = pe_ttm / netprofit_yoy if pe_ttm and netprofit_yoy and netprofit_yoy > 0 else None
+
+            # 计算 TTM 数据（同时计算归母和扣非）
+            income_statements = financial_data.get('income_statement', [])
+            financial_indicators = financial_data.get('financial_indicators', [])
+            
+            revenue_ttm = self._calculate_ttm_from_tushare(income_statements, 'revenue')
+            net_profit_ttm = self._calculate_ttm_from_tushare(income_statements, 'n_income_attr_p')
+            
+            # 🚀 使用扣非归母净利润计算 TTM（从 financial_indicators 获取 profit_dedt）
+            net_profit_dedt_ttm = self._calculate_ttm_from_tushare(financial_indicators, 'profit_dedt')
+
+            # 🚀 计算 TTM 扣非归母净利润增长率（最近12个月相对于前12个月）
+            # 注意：profit_dedt 字段在 financial_indicators 接口中，不在 income_statement 中
+            ttm_growth_rate = self._calculate_ttm_growth_rate(financial_indicators, 'profit_dedt')
+
+            # 计算 PEG = PE_TTM / TTM扣非净利润增长率
+            # 注意：TTM增长率是百分比形式（如 13.54 表示 13.54%），PEG直接用百分比数值计算
+            if pe_ttm and ttm_growth_rate and ttm_growth_rate != 0:
+                peg = pe_ttm / ttm_growth_rate  # 直接除以百分比数值
+                self.logger.info(f"✅ [PEG计算] PE_TTM={pe_ttm:.2f}, TTM扣非增长率={ttm_growth_rate:.2f}%, PEG={peg:.2f}")
+            else:
+                peg = None
+                if not ttm_growth_rate:
+                    self.logger.warning(f"⚠️ [PEG计算] 无法计算TTM扣非增长率，PEG设为N/A")
 
             # 提取基础信息
             symbol = ts_code.split('.')[0] if '.' in ts_code else ts_code
             report_period = latest_income.get('end_date') or latest_balance.get('end_date') or latest_cashflow.get('end_date')
             ann_date = latest_income.get('ann_date') or latest_balance.get('ann_date') or latest_cashflow.get('ann_date')
-
-            # 计算 TTM 数据
-            income_statements = financial_data.get('income_statement', [])
-            revenue_ttm = self._calculate_ttm_from_tushare(income_statements, 'revenue')
-            net_profit_ttm = self._calculate_ttm_from_tushare(income_statements, 'n_income_attr_p')
 
             standardized_data = {
                 # 基础信息
@@ -1372,6 +1397,8 @@ class TushareProvider(BaseStockDataProvider):
                 "net_income": self._safe_float(latest_income.get('n_income')),  # 净利润（单期）
                 "net_profit": self._safe_float(latest_income.get('n_income_attr_p')),  # 归属母公司净利润（单期）
                 "net_profit_ttm": net_profit_ttm,  # 归属母公司净利润（TTM）
+                "net_profit_dedt": self._safe_float(latest_income.get('profit_dedt')),  # 扣非归母净利润（单期）
+                "net_profit_dedt_ttm": net_profit_dedt_ttm,  # 扣非归母净利润（TTM）
                 "oper_profit": self._safe_float(latest_income.get('oper_profit')),  # 营业利润
                 "total_profit": self._safe_float(latest_income.get('total_profit')),  # 利润总额
                 "oper_cost": self._safe_float(latest_income.get('oper_cost')),  # 营业成本
@@ -1422,7 +1449,7 @@ class TushareProvider(BaseStockDataProvider):
                 "current_ratio": self._safe_float(latest_indicator.get('current_ratio')),  # 流动比率
                 "quick_ratio": self._safe_float(latest_indicator.get('quick_ratio')),  # 速动比率
                 "cash_ratio": self._safe_float(latest_indicator.get('cash_ratio')),  # 现金比率
-                "netprofit_yoy": netprofit_yoy,  # 归母净利润同比增长率
+                "netprofit_yoy": self._safe_float(latest_indicator.get('netprofit_yoy')),  # 归母净利润同比增长率（年度）
                 "or_yoy": self._safe_float(latest_indicator.get('or_yoy')),  # 营业收入同比增长率
                 "eps": self._safe_float(latest_indicator.get('eps')),  # 每股收益
                 "bps": self._safe_float(latest_indicator.get('bps')),  # 每股净资产
@@ -1434,6 +1461,7 @@ class TushareProvider(BaseStockDataProvider):
                 "pe_ttm": pe_ttm,
                 "pb": self._safe_float(latest_daily_basic.get('pb')),
                 "peg": peg,
+                "ttm_growth_rate": ttm_growth_rate,  # TTM扣非归母净利润增长率（百分比）
                 "total_mv": self._safe_float(latest_daily_basic.get('total_mv')),  # 万元
                 "circ_mv": self._safe_float(latest_daily_basic.get('circ_mv')),  # 万元
 
@@ -1563,6 +1591,134 @@ class TushareProvider(BaseStockDataProvider):
 
         except Exception as e:
             self.logger.warning(f"❌ TTM计算异常: {e}")
+            return None
+
+    def _calculate_ttm_growth_rate(self, income_statements: list, field: str) -> Optional[float]:
+        """
+        从 Tushare 利润表数据计算 TTM 净利润增长率（最近12个月相对于前12个月）
+
+        PEG = PE_TTM / TTM净利润增长率
+        其中：TTM净利润增长率 = (当前TTM净利润 - 前一年同期TTM净利润) / |前一年同期TTM净利润| * 100
+
+        TTM 计算公式：
+        TTM = 去年同期之后的最近年报 + (本期累计 - 去年同期累计)
+
+        例如：2025Q2 TTM = 2024年报 + (2025Q2 - 2024Q2)
+                        = 2024年1-12月 + (2025年1-6月 - 2024年1-6月)
+                        = 2024年7-12月 + 2025年1-6月
+                        = 最近12个月
+
+        Args:
+            income_statements: 利润表数据列表（按报告期倒序）
+            field: 字段名（'n_income_attr_p' 表示归属母公司净利润）
+
+        Returns:
+            TTM 净利润增长率（百分比），如果无法计算则返回 None
+        """
+        if not income_statements or len(income_statements) < 2:
+            self.logger.warning(f"⚠️ TTM增长率计算失败: 数据不足（需要至少2期数据）")
+            return None
+
+        try:
+            # 1. 获取当前 TTM 净利润（调用现有的 TTM 计算方法）
+            current_ttm = self._calculate_ttm_from_tushare(income_statements, field)
+            if current_ttm is None:
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 无法计算当前 TTM 净利润")
+                return None
+
+            # 2. 计算前一年同期的 TTM 净利润
+            latest = income_statements[0]
+            latest_period = latest.get('end_date')
+            latest_value = self._safe_float(latest.get(field))
+
+            if not latest_period or latest_value is None:
+                return None
+
+            # 获取最近 4 个季度的数据
+            recent_quarters = []
+            for stmt in income_statements[:4]:
+                period = stmt.get('end_date')
+                value = self._safe_float(stmt.get(field))
+                if period and value is not None:
+                    recent_quarters.append({'end_date': period, field: value})
+
+            if len(recent_quarters) < 2:
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 历史数据不足")
+                return None
+
+            # 3. 构造去年同期数据（所有季度都减1年）
+            last_year_quarters = []
+            for q in recent_quarters:
+                period = q['end_date']
+                year = str(int(period[:4]) - 1)
+                last_year_period = year + period[4:]
+
+                # 在原始数据中找到对应期间
+                for stmt in income_statements:
+                    if stmt.get('end_date') == last_year_period:
+                        value = self._safe_float(stmt.get(field))
+                        if value is not None:
+                            last_year_quarters.append({'end_date': last_year_period, field: value})
+                        break
+
+            if len(last_year_quarters) < 2:
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 缺少去年同期数据")
+                return None
+
+            # 4. 计算前一年同期的 TTM 净利润
+            last_latest = last_year_quarters[0]
+            last_latest_period = last_latest['end_date']
+            last_latest_value = last_latest[field]
+
+            last_year_same_period = str(int(last_latest_period[:4]) - 1) + last_latest_period[4:]
+
+            # 查找前一年年报作为基准
+            last_base_period = None
+            for stmt in income_statements:
+                period = stmt.get('end_date')
+                if period and period > last_year_same_period and period[4:8] == '1231':
+                    last_base_period = stmt
+                    break
+
+            if not last_base_period:
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 缺少前一年年报数据")
+                return None
+
+            last_base_value = self._safe_float(last_base_period.get(field))
+            if last_base_value is None:
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 前一年年报数据为空")
+                return None
+
+            # 找到前一年同期的数据
+            last_last_year_value = None
+            for stmt in income_statements:
+                if stmt.get('end_date') == last_year_same_period:
+                    last_last_year_value = self._safe_float(stmt.get(field))
+                    break
+
+            if last_last_year_value is None:
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 无法获取前一年同期数据")
+                return None
+
+            # 计算前一年同期的 TTM
+            last_year_ttm = last_base_value + (last_latest_value - last_last_year_value)
+
+            if abs(last_year_ttm) < 0.01:  # 避免除零
+                self.logger.warning(f"⚠️ TTM增长率计算失败: 前一年 TTM 净利润接近零（{last_year_ttm}）")
+                return None
+
+            # 5. 计算 TTM 净利润增长率
+            growth_rate = ((current_ttm - last_year_ttm) / abs(last_year_ttm)) * 100
+
+            self.logger.info(
+                f"✅ [TTM增长率] 当前TTM={current_ttm:.2f}, 前一年同期TTM={last_year_ttm:.2f}, "
+                f"增长率={growth_rate:.2f}%"
+            )
+
+            return growth_rate
+
+        except Exception as e:
+            self.logger.warning(f"❌ TTM增长率计算异常: {e}")
             return None
 
     def _determine_report_type(self, report_period: str) -> str:

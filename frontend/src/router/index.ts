@@ -381,6 +381,28 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
+  {
+    path: '/pulse',
+    name: 'Pulse',
+    component: () => import('@/layouts/BasicLayout.vue'),
+    meta: {
+      title: '全球宏观预期概率',
+      icon: 'TrendCharts',
+      requiresAuth: true,
+      transition: 'slide-up'
+    },
+    children: [
+      {
+        path: '',
+        name: 'PulseHome',
+        component: () => import('@/views/Pulse/index.vue'),
+        meta: {
+          title: '全球宏观预期概率',
+          requiresAuth: true
+        }
+      }
+    ]
+  },
 
   {
     path: '/:pathMatch(.*)*',

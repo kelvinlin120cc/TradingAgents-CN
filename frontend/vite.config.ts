@@ -36,7 +36,8 @@ export default defineConfig({
       '@stores': resolve(__dirname, 'src/stores'),
       '@utils': resolve(__dirname, 'src/utils'),
       '@types': resolve(__dirname, 'src/types'),
-      '@api': resolve(__dirname, 'src/api')
+      '@api': resolve(__dirname, 'src/api'),
+      '@docs': resolve(__dirname, '../docs')
     }
   },
   server: {

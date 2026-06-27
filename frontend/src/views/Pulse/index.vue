@@ -224,7 +224,9 @@ const fetchData = async (force = false) => {
     }
   } catch (e: any) {
     error.value = e.response?.data?.detail || '获取数据失败'
-    ElMessage.error(error.value)
+    if (error.value) {
+      ElMessage.error(error.value)
+    }
   } finally {
     loading.value = false
     refreshing.value = false

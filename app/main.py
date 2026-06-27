@@ -728,7 +728,7 @@ app.include_router(financial_data.router, tags=["financial-data"])
 app.include_router(news_data.router, tags=["news-data"])
 app.include_router(social_media.router, tags=["social-media"])
 app.include_router(internal_messages.router, tags=["internal-messages"])
-app.include_router(pulse.router, tags=["pulse"])
+app.include_router(pulse.router, prefix="/api", tags=["pulse"])
 
 
 @app.get("/")

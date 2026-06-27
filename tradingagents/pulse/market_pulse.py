@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,7 @@ from tradingagents.pulse import kalshi_signals
 logger = logging.getLogger(__name__)
 
 # Snapshot path for TradingAgents-CN
-_SNAPSHOT_DIR = Path("/app/data/pulse")
+_SNAPSHOT_DIR = Path(os.getenv("TRADINGAGENTS_DATA_DIR", "data")) / "pulse"
 
 
 def _snapshot_path() -> Path:
@@ -99,14 +100,48 @@ _rebuilding = False  # guards against piling up concurrent background rebuilds
 
 async def _build() -> dict[str, Any]:
     """Pull both sources, classify, group, and pin. The slow path."""
-    pm, ks = await asyncio.gather(
-        _shaped_polymarket(force=True),
-        kalshi_signals.fetch_shaped(force=True),
-    )
+    # 并行获取数据，设置超时
+    try:
+        pm_task = asyncio.create_task(_shaped_polymarket(force=True))
+        ks_task = asyncio.create_task(kalshi_signals.fetch_shaped(force=True))
+        
+        # 等待 polymarket 最多 15 秒
+        pm, ks = await asyncio.wait_for(
+            asyncio.gather(pm_task, ks_task, return_exceptions=True),
+            timeout=30.0
+        )
+        
+        # 处理异常
+        if isinstance(pm, Exception):
+            logger.warning("Polymarket fetch failed: %s, using empty list", pm)
+            pm = []
+        if isinstance(ks, Exception):
+            logger.warning("Kalshi fetch failed: %s, using empty list", ks)
+            ks = []
+            
+    except asyncio.TimeoutError:
+        logger.warning("Timeout fetching market data, using polymarket only")
+        try:
+            pm = await asyncio.wait_for(_shaped_polymarket(force=True), timeout=15.0)
+            ks = []
+        except Exception:
+            pm = []
+            ks = []
+    except Exception as exc:
+        logger.error("Failed to fetch market data: %s", exc)
+        pm = []
+        ks = []
+    
     merged = pm + ks
+    sources = []
+    if pm:
+        sources.append("polymarket")
+    if ks:
+        sources.append("kalshi")
+        
     overview = {
         "as_of": datetime.now().isoformat(timespec="seconds"),
-        "sources": ["polymarket", "kalshi"],
+        "sources": sources,
         "module_order": market_taxonomy.MODULES,
         "core_modules": market_taxonomy.CORE_MODULES,
         "modules": _group_by_module(merged),

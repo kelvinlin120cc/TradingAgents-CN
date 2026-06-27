@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 EVENTS_URL = "https://api.elections.kalshi.com/trade-api/v2/events"
 
 # Snapshot path for TradingAgents-CN
-_SNAPSHOT_DIR = Path("/app/data/pulse")
+_SNAPSHOT_DIR = Path(os.getenv("TRADINGAGENTS_DATA_DIR", "data")) / "pulse"
 
 
 def _snapshot_path() -> Path:

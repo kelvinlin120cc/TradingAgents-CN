@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,7 @@ GAMMA_MARKETS_URL = "https://gamma-api.polymarket.com/markets"
 CLOB_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 
 # Snapshot path for TradingAgents-CN
-_SNAPSHOT_DIR = Path("/app/data/pulse")
+_SNAPSHOT_DIR = Path(os.getenv("TRADINGAGENTS_DATA_DIR", "data")) / "pulse"
 
 
 def _snapshot_path() -> Path:
